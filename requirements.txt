@@ -1,0 +1,10 @@
+numpy
+pandas
+xpress
+geopandas
+scipy
+scikit-learn
+geopy
+shapely
+folium
+ujson
