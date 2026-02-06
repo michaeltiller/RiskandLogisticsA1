@@ -13,6 +13,7 @@ from geopy.distance import great_circle
 import geopandas as gpd
 import folium
 from folium import CircleMarker
+import numpy as np
 
 
 num_clusters = 60
@@ -79,6 +80,25 @@ temp = gpd.GeoDataFrame(
     geometry=[Point(lon, lat) for lat, lon in centermost_points],
     crs="EPSG:4326"
 )
+
+def get_centermost_point_index(cluster):
+    points = [(lon, lat) for lat, lon in cluster]
+    centroid = MultiPoint(points).centroid
+    centermost_point_index = np.argmin(
+        cluster,
+        key=lambda point: great_circle(point, (centroid.y, centroid.x)).m
+    )
+    return centermost_point_index
+
+#ND changes
+indices_centremost_points = []
+for i in range(num_clusters):
+    # zero out the points not in cluster i
+    cluster = pd.Series( arr*np.array([cluster_labels == i]) )
+
+    centroid_i = cluster.map( get_centermost_point)
+
+    indices_centremost_points.append(i)
 
 
 m = folium.Map(
