@@ -8,3 +8,8 @@ geopy
 shapely
 folium
 ujson
+matplotlib
+contextily
+networkx
+geopandas
+pyproj
