@@ -50,9 +50,9 @@ Minimize the total cost, consisting of one-time construction costs, cumulative a
         \sum_{j \in J} x_{jit}^{KC} = b_{it} \quad \forall i \in I, t \in T
     \end{equation}
 
-    \item \textbf{Flow Conservation:} Incoming supply from all suppliers must match outgoing deliveries to all customers at each warehouse location:
+    \item \textbf{Flow:} Incoming supply from all suppliers must not exceed outgoing deliveries to all customers at each warehouse location:
     \begin{equation}
-        \sum_{k \in K} x_{kjt}^{SK} = \sum_{i \in I} x_{jit}^{KC} \quad \forall j \in J, t \in T
+        \sum_{k \in K} x_{kjt}^{SK} \leq \sum_{i \in I} x_{jit}^{KC} \quad \forall j \in J, t \in T
     \end{equation}
 
     \item \textbf{Capacity and Operational Linkage:} Total warehouse throughput cannot exceed its capacity and requires the facility to be operational ($z_{jt}=1$):
