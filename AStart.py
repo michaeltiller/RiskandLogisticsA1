@@ -42,7 +42,7 @@ Demand = (
         .set_index(["Customer", "Product"])["Demand"]
         .to_dict()
 )
-
+Operating_costs = pd.read_csv(f"{data_dir}/Operating.csv", index_col=0)["Operating cost"].to_dict()
 
 # -----------------------------------------------------------------------------
 # Read demand data with time periods
@@ -78,9 +78,10 @@ nbScenarios = DemandPeriodsScenarios_df["Scenario"].max()
 # Index sets
 # =============================================================================
 rng = np.random.RandomState(2026)
-Customers = rng.choice(PostcodeDistricts.index, size=10, replace=False)
-Candidates = rng.choice(Candidates_df.index, size =10, replace=False)
-Suppliers  = rng.choice(Suppliers_df.index, size=10, replace=False)
+Customers = rng.choice(PostcodeDistricts.index, size=60, replace=False)
+Candidates = rng.choice(Candidates_df.index, size =60, replace=False)
+Suppliers = Suppliers_df.index
+# Suppliers  = rng.choice(Suppliers_df.index, size=10, replace=False)
 
 nbCustomers = len(Customers)
 nbSuppliers = len(Suppliers)
@@ -91,8 +92,6 @@ Times = range(1, nbPeriods + 1)
 Scenarios = range(1, nbScenarios + 1)
 Products = (1,2,3,4) #hardcoding
 final_t = max(Times)
-# i hope the products are in the same units
-total_demand = sum((Demand[i,p] for i in Customers for p in Products))
 
 
 
@@ -201,13 +200,17 @@ prob.addConstraint(
 )
 
 
-# by year 10 we meet 5% of demand or 100%?
+# We must meet all customer demands each year
 prob.addConstraint(
-    xp.Sum(Demand[i,p]*x[i,j,final_t,p] 
-           for i in Customers for j in Candidates for p in Products
+    xp.Sum(
+        DemandPeriods[i,p,t]*x[i,j,t,p] 
+        for i in Customers for j in Candidates for t in Times for p in Products
     )
     >= 
-    .05*total_demand
+    sum(
+        DemandPeriods[i,p,t] 
+        for i in Customers for t in Times for p in Products
+    )
 )
 # constrain that suppliers only supply their product type
 prob.addConstraint(
@@ -219,11 +222,13 @@ prob.addConstraint(
 # a warehouse can deliver no more than what it has in stock
 prob.addConstraint(
     xp.Sum(
-        z[k,j,t,p] for k in Suppliers
+        Suppliers_df["Capacity"][k] * z[k,j,t,p]        #Into warehouse from suppliers
+        for k in Suppliers 
+        if Suppliers_df["Product group"][k] == p
     )
     >=
     xp.Sum(
-        Demand[i,p] for i in Customers
+        DemandPeriods[i,p,t]  * x[i,j,t,p] for i in Customers      #Out of warehouse to customers
     )
     for p in Products for j in Candidates for t in Times
 )
@@ -235,6 +240,10 @@ warehouse_setup_costs = xp.Sum(
     Candidates_df["Setup cost"][j]*y[j,final_t]
     for j in Candidates
 )
+warehouse_operating_costs = xp.Sum(
+    Operating_costs[j]*y[j,t] 
+    for j in Candidates for t in Times
+)
 supplier_to_warehouse_costs = xp.Sum(
     CostSupplierCandidate[k,j]*z[k,j,t,p]
     for k in Suppliers for j in Candidates for t in Times for p in Products
@@ -245,10 +254,11 @@ warehouse_to_customer_costs = xp.Sum(
 )
 
 prob.setObjective(
-    warehouse_setup_costs+supplier_to_warehouse_costs+warehouse_to_customer_costs
+    warehouse_setup_costs + warehouse_operating_costs + supplier_to_warehouse_costs + warehouse_to_customer_costs
 )
 
 # xp.setOutputEnabled(True)
+print("Solving")
 prob.controls.maxtime = -60*3 # stops after 3 mins
 prob.solve()
 
