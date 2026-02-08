@@ -124,12 +124,6 @@ VehicleCostPerMileAndTonneOverall = {
     3: 0.857
 }
 
-# CO₂ emissions in kg per mile and tonne transported
-VehicleCO2PerMileAndTonne = {
-    1: 0.11,
-    2: 0.31,
-    3: 0.30
-}
 
 # =============================================================================
 # Transport cost calculations
@@ -257,7 +251,7 @@ prob.setObjective(
     warehouse_setup_costs + warehouse_operating_costs + supplier_to_warehouse_costs + warehouse_to_customer_costs
 )
 
-# xp.setOutputEnabled(True)
+xp.setOutputEnabled(False)
 print("Solving")
 prob.controls.maxtime = -60*3 # stops after 3 mins
 prob.solve()
