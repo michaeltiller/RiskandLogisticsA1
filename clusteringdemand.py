@@ -1,10 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Feb  6 11:00:03 2026
-
-@author: michael
-"""
 import pandas as pd
 from sklearn.cluster import KMeans
 from pyproj import Transformer
@@ -28,11 +21,10 @@ demand_df = pd.read_csv(f"{data_dir}/Demand.csv")
 
 # map demand to the candidate location 
 
+demand_grouped = demand_df.groupby('Customer')["Demand"].sum()
+# demand_grouped = demand_df.groupby('Customer')['Demand'].sum().reset_index() # this would use 0 based indexing which isnt used in the excels given
 
-demand_grouped = demand_df.groupby('Customer')['Demand'].sum().reset_index()
-
-
-Candidates_df = pd.merge(Candidates_df, demand_grouped, left_on = 'Candidate ID', right_on = 'Customer', how ='left')
+Candidates_df = pd.merge(Candidates_df, demand_grouped, left_on = 'Candidate ID', right_on = demand_grouped.index, how ='left')
 
 
 transformer = Transformer.from_crs(
@@ -68,54 +60,42 @@ def get_centermost_point(cluster):
         cluster,
         key=lambda point: great_circle(point, (centroid.y, centroid.x)).m
     )
-    return centermost_point  # 
+    return centermost_point
 
 centermost_points = clusters.map(get_centermost_point)
 
-temp = gpd.GeoDataFrame(
+centermost_points = pd.DataFrame(
     {
         "lat": centermost_points.map(lambda x: x[0]),
         "lon": centermost_points.map(lambda x: x[1]),
-    },
-    geometry=[Point(lon, lat) for lat, lon in centermost_points],
-    crs="EPSG:4326"
+        "cluster_centre": 1
+    }
 )
+All_Candidates_df = Candidates_df.merge(right=centermost_points, how="left", on=["lon", "lat"])
+# one hot encode the clustre centres
+All_Candidates_df["cluster_centre"] = All_Candidates_df["cluster_centre"].fillna(0).astype(bool)
 
-def get_centermost_point_index(cluster):
-    points = [(lon, lat) for lat, lon in cluster]
-    centroid = MultiPoint(points).centroid
-    centermost_point_index = np.argmin(
-        cluster,
-        key=lambda point: great_circle(point, (centroid.y, centroid.x)).m
-    )
-    return centermost_point_index
+assert num_clusters == All_Candidates_df["cluster_centre"].sum()
+print(All_Candidates_df.head())
 
-#ND changes
-indices_centremost_points = []
-for i in range(num_clusters):
-    # zero out the points not in cluster i
-    cluster = pd.Series( arr*np.array([cluster_labels == i]) )
-
-    centroid_i = cluster.map( get_centermost_point)
-
-    indices_centremost_points.append(i)
-
+reduced_Candidates_df = All_Candidates_df.loc[ All_Candidates_df["cluster_centre"] ]
+print(reduced_Candidates_df.head())
 
 m = folium.Map(
-    location=[temp['lat'].mean(), temp['lon'].mean()],
+    location=[All_Candidates_df['lat'].mean(), All_Candidates_df['lon'].mean()],
     zoom_start=13
 )
 
-for _, row in temp.iterrows():
+for _, row in All_Candidates_df.iterrows():
     folium.CircleMarker(
         location=[row['lat'], row['lon']],
-        radius=2,
-        color="green",
+        radius=4 if row["cluster_centre"] else 2,
+        color= "red" if row["cluster_centre"] else "blue",
         fill=True,
         fill_color="green",
-        fill_opacity=0.6,
+        fill_opacity=1 if row["cluster_centre"] else 0.6,
     ).add_to(m)
-
-m.save("clusteredloc.html")
+m.show_in_browser()
+# m.save("clusteredloc.html")
 
 
