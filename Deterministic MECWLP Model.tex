@@ -1,0 +1,86 @@
+\documentclass{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+
+\begin{document}
+
+\section*{Mathematical Model: Multi-Period MECWLP}
+
+\subsection*{1. Sets and Indices}
+\begin{itemize}
+    \item $I$: Set of postcode districts (customers), indexed by $i$.
+    \item $J$: Set of candidate facility locations, indexed by $j$.
+    \item $K$: Set of suppliers, indexed by $k$.
+    \item $T$: Set of time periods (years), indexed by $t \in \{1, \dots, 10\}$.
+\end{itemize}
+
+\subsection*{2. Parameters}
+\begin{itemize}
+    \item $b_{it}$: Demand of customer $i$ in period $t$.
+    \item $f_j$: One-off construction cost for a warehouse at location $j$.
+    \item $g_j$: Annual operating cost for warehouse $j$, incurred every year the facility is in operation.
+    \item $Cap_j$: Maximum throughput capacity of warehouse $j$.
+    \item $C_{kj}^{SK}$: Unit transport cost from supplier $k$ to warehouse $j$.
+    \item $C_{ji}^{KC}$: Unit transport cost from warehouse $j$ to customer $i$.
+    \item $V_{cap}$: Maximum capacity of the delivery vehicle.
+\end{itemize}
+
+\subsection*{3. Decision Variables}
+\begin{itemize}
+    \item $y_{jt} \in \{0, 1\}$: 1 if a warehouse at location $j$ is constructed in period $t$, 0 otherwise.
+    \item $z_{jt} \in \{0, 1\}$: 1 if a warehouse at location $j$ is operating in period $t$, 0 otherwise.
+    \item $x_{kjt}^{SK} \geq 0$: Quantity transported from supplier $k$ to warehouse $j$ in period $t$.
+    \item $x_{jit}^{KC} \geq 0$: Quantity transported from warehouse $j$ to customer $i$ in period $t$.
+    \item $n_{jit} \in \mathbb{Z}^+$: Number of vehicle trips required from $j$ to $i$ in period $t$.
+\end{itemize}
+
+\subsection*{4. Objective Function}
+Minimize the total cost, consisting of one-time construction costs, cumulative annual operating costs, and total transportation costs across the 10-year horizon:
+\begin{equation}
+    \min \quad \sum_{j \in J} \sum_{t \in T} f_j y_{jt} + \sum_{j \in J} \sum_{t \in T} g_j z_{jt} + \sum_{t \in T} \left( \sum_{k \in K} \sum_{j \in J} C_{kj}^{SK} x_{kjt}^{SK} + \sum_{j \in J} \sum_{i \in I} C_{ji}^{KC} x_{jit}^{KC} \right)
+\end{equation}
+
+\subsection*{5. Constraints}
+\begin{itemize}
+    \item \textbf{Demand Satisfaction:} Total flow through the network must meet each customer's demand for every period $t$:
+    \begin{equation}
+        \sum_{j \in J} x_{jit}^{KC} = b_{it} \quad \forall i \in I, t \in T
+    \end{equation}
+
+    \item \textbf{Flow:} Incoming supply from all suppliers must not exceed outgoing deliveries to all customers at each warehouse location:
+    \begin{equation}
+        \sum_{k \in K} x_{kjt}^{SK} \leq \sum_{i \in I} x_{jit}^{KC} \quad \forall j \in J, t \in T
+    \end{equation}
+
+    \item \textbf{Capacity and Operational Linkage:} Total warehouse throughput cannot exceed its capacity and requires the facility to be operational ($z_{jt}=1$):
+    \begin{equation}
+        \sum_{i \in I} x_{jit}^{KC} \leq Cap_j z_{jt} \quad \forall j \in J, t \in T
+    \end{equation}
+
+    \item \textbf{Vehicle Trip Requirements:} Ensures the number of trips is sufficient to cover the total quantity transported:
+    \begin{equation}
+        n_{jit} \geq \frac{x_{jit}^{KC}}{V_{cap}} \quad \forall i \in I, j \in J, t \in T
+    \end{equation}
+
+    \item \textbf{Gradual Build-up Logic:} A warehouse is operational in period $t$ if it was constructed in that year or any preceding year:
+    \begin{equation}
+        z_{jt} = \sum_{\tau=1}^t y_{j\tau} \quad \forall j \in J, t \in T
+    \end{equation}
+
+    \item \textbf{Single Construction Constraint:} Each candidate location can have a warehouse built at most once during the planning horizon:
+    \begin{equation}
+        \sum_{t \in T} y_{jt} \leq 1 \quad \forall j \in J
+    \end{equation}
+
+    \item \textbf{Variable Domains:}
+    \begin{align}
+        y_{jt}, z_{jt} &\in \{0, 1\} \quad \forall j \in J, t \in T \\
+        x_{kjt}^{SK}, x_{jit}^{KC} &\geq 0 \quad \forall i, j, k, t \\
+        n_{jit} &\in \mathbb{Z}^+ \quad \forall i, j, t
+    \end{align}
+\end{itemize}
+
+\end{document}
