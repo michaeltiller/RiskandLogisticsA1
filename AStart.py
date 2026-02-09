@@ -3,14 +3,31 @@ import pandas as pd
 import xpress as xp
 import platform
 from helper_funcs import *
+from pyproj import Transformer
 
 
 data_dir = "CaseStudyDataPY"
+transformer = Transformer.from_crs(
+    "EPSG:27700",
+    "EPSG:4326",
+    always_xy=True
+)
+
 Suppliers_df = pd.read_csv(f"{data_dir}/Suppliers.csv", index_col=0)
 
-PostcodeDistricts = pd.read_csv(f"{data_dir}/PostcodeDistricts.csv", index_col=0)
+PostcodeDistricts_df = pd.read_csv(f"{data_dir}/PostcodeDistricts.csv", index_col=0)
+PostcodeDistricts_df["lon"], PostcodeDistricts_df["lat"] = transformer.transform(
+    PostcodeDistricts_df["X (Easting)"].values,
+    PostcodeDistricts_df["Y (Northing)"].values
+)
 
 Candidates_df = pd.read_csv(f"{data_dir}/Candidates.csv", index_col=0)
+
+
+Candidates_df["lon"], Candidates_df["lat"] = transformer.transform(
+    Candidates_df["X (Easting)"].values,
+    Candidates_df["Y (Northing)"].values
+)
 # Maximum candidate index
 nbCandidates = Candidates_df.index.max()
 
@@ -78,7 +95,7 @@ nbScenarios = DemandPeriodsScenarios_df["Scenario"].max()
 # Index sets
 # =============================================================================
 rng = np.random.RandomState(2026)
-Customers = rng.choice(PostcodeDistricts.index, size=60, replace=False)
+Customers = rng.choice(PostcodeDistricts_df.index, size=60, replace=False)
 Candidates = rng.choice(Candidates_df.index, size =60, replace=False)
 Suppliers = Suppliers_df.index
 # Suppliers  = rng.choice(Suppliers_df.index, size=10, replace=False)
@@ -222,7 +239,8 @@ prob.addConstraint(
     )
     >=
     xp.Sum(
-        DemandPeriods[i,p,t]  * x[i,j,t,p] for i in Customers      #Out of warehouse to customers
+        DemandPeriods[i,p,t] * x[i,j,t,p]              #Out of warehouse to customers
+        for i in Customers                          
     )
     for p in Products for j in Candidates for t in Times
 )
@@ -239,11 +257,11 @@ warehouse_operating_costs = xp.Sum(
     for j in Candidates for t in Times
 )
 supplier_to_warehouse_costs = xp.Sum(
-    CostSupplierCandidate[k,j]*z[k,j,t,p]
+    CostSupplierCandidate[k,j] * Suppliers_df["Capacity"][k] * z[k,j,t,p]
     for k in Suppliers for j in Candidates for t in Times for p in Products
 )
 warehouse_to_customer_costs = xp.Sum(
-    CostCandidateCustomers[j,i]*x[i,j,t,p]
+    CostCandidateCustomers[j,i] * DemandPeriods[i,p,t] * x[i,j,t,p]
     for i in Customers for j in Candidates for t in Times for p in Products
 )
 
@@ -259,5 +277,17 @@ prob.solve()
 # =============================================================================
 # Post-processing and data visualisation
 # =============================================================================
+x = { k:int(v) for k,v in prob.getSolution(x).items() }   # if x is not binary change this !!!
+y = { k:int(v) for k,v in prob.getSolution(y).items() }
+z = prob.getSolution(z)
 
 print_sol_status(prob)
+
+get_basic_summary_sol(prob,xs=x, ys = y, zs=y)
+
+put_solution_on_map(
+    probs=prob,
+    xs=x, ys = y, zs=z,
+    cand_gdf=Candidates_df.loc[Candidates], cust_gdf=PostcodeDistricts_df.loc[Customers], supp_gdf=Suppliers_df
+    ,time_index=Times, product_index=Products
+)
