@@ -16,70 +16,86 @@ data_dir = "CaseStudyDataPY"
 
 PostcodeDistricts = pd.read_csv(f"{data_dir}/PostcodeDistricts.csv", index_col=0)
 Candidates_df = pd.read_csv(f"{data_dir}/Candidates.csv")
-demand_df = pd.read_csv(f"{data_dir}/Demand.csv")
+Demand_df = pd.read_csv(f"{data_dir}/Demand.csv")
 
 
 # map demand to the candidate location 
 
-demand_grouped = demand_df.groupby('Customer')["Demand"].sum()
-# demand_grouped = demand_df.groupby('Customer')['Demand'].sum().reset_index() # this would use 0 based indexing which isnt used in the excels given
-
-Candidates_df = pd.merge(Candidates_df, demand_grouped, left_on = 'Candidate ID', right_on = demand_grouped.index, how ='left')
+def calcClusters(Demand_df, Candidates_df, num_clusters):
 
 
-transformer = Transformer.from_crs(
-    "EPSG:27700",
-    "EPSG:4326",
-    always_xy=True
-)
+    demand_grouped = Demand_df.groupby('Customer')["Demand"].sum()
+    
+    Candidates_df = pd.merge(Candidates_df, demand_grouped, left_on = 'Candidate ID', right_on = demand_grouped.index, how ='left')
+    Candidates_df = Candidates_df.rename(columns = {"Demand" : "Total Demand"})
+    
 
-Candidates_df["lon"], Candidates_df["lat"] = transformer.transform(
-    Candidates_df["X (Easting)"].values,
-    Candidates_df["Y (Northing)"].values
-)
-
-
-arr = Candidates_df[['lat', 'lon']].to_numpy()
-kmeans_weights = Candidates_df['Demand'].to_numpy()
-
-
-
-# cand do weights as raw weights or could do z score
-
-kmeans = KMeans(n_clusters=num_clusters, random_state=0).fit(arr, sample_weight=kmeans_weights)
-
-cluster_labels = kmeans.labels_ 
-
-
-clusters = pd.Series([arr[cluster_labels == n] for n in range(num_clusters)])
-
-def get_centermost_point(cluster):
-    points = [(lon, lat) for lat, lon in cluster]
-    centroid = MultiPoint(points).centroid
-    centermost_point = min(
-        cluster,
-        key=lambda point: great_circle(point, (centroid.y, centroid.x)).m
+    transformer = Transformer.from_crs(
+        "EPSG:27700",
+        "EPSG:4326",
+        always_xy=True
     )
-    return centermost_point
+    
+    #Transfrom from Easting and Northing values to lat and lon 
+    Candidates_df["lon"], Candidates_df["lat"] = transformer.transform(
+        Candidates_df["X (Easting)"].values,
+        Candidates_df["Y (Northing)"].values
+    )
+    
+    #Create array of lat and lon as well as the weight array of demand 
+    arr = Candidates_df[['lat', 'lon']].to_numpy()
+    kmeans_weights = Candidates_df['Total Demand'].to_numpy()
 
-centermost_points = clusters.map(get_centermost_point)
+        
+    kmeans = KMeans(n_clusters=num_clusters, random_state=0).fit(arr, sample_weight=kmeans_weights)
+    
+    cluster_labels = kmeans.labels_ 
+    
+    
+    clusters = pd.Series([arr[cluster_labels == n] for n in range(num_clusters)])
+    
+    def get_centermost_point(cluster):
+        points = [(lon, lat) for lat, lon in cluster]
+        centroid = MultiPoint(points).centroid
+        centermost_point = min(
+            cluster,
+            key=lambda point: great_circle(point, (centroid.y, centroid.x)).m
+        )
+        return centermost_point
+    
+    centermost_points = clusters.map(get_centermost_point)
+    
+    centermost_points = pd.DataFrame(
+        {
+            "lat": centermost_points.map(lambda x: x[0]),
+            "lon": centermost_points.map(lambda x: x[1]),
+            "cluster_centre": 1
+        }
+    )
+    All_Candidates_df = Candidates_df.merge(right=centermost_points, how="left", on=["lon", "lat"])
+    # one hot encode the clustre centres
+    All_Candidates_df["cluster_centre"] = All_Candidates_df["cluster_centre"].fillna(0).astype(bool)
+    
+    assert num_clusters == All_Candidates_df["cluster_centre"].sum()
+    print(All_Candidates_df.head())
+    
+    reduced_Candidates_df = All_Candidates_df.loc[ All_Candidates_df["cluster_centre"] ]
+    print(reduced_Candidates_df.head())
+    
+    reduced_ids = list(reduced_Candidates_df['Candidate ID'])
+    
+    reduced_demand_df = Demand_df[Demand_df['Customer'].isin(reduced_ids)]
+    
+    
+    return All_Candidates_df, reduced_Candidates_df, reduced_demand_df
+    
+    
+    # creates candidates, then also need seperate df which has demand per product type for each candidate # so are we still using 400 customers and just 60 candidate locations to build?
+    
+All_Candidates_df, reduced_Candidates_df, reduced_demand_df = calcClusters(Demand_df, Candidates_df, num_clusters) 
 
-centermost_points = pd.DataFrame(
-    {
-        "lat": centermost_points.map(lambda x: x[0]),
-        "lon": centermost_points.map(lambda x: x[1]),
-        "cluster_centre": 1
-    }
-)
-All_Candidates_df = Candidates_df.merge(right=centermost_points, how="left", on=["lon", "lat"])
-# one hot encode the clustre centres
-All_Candidates_df["cluster_centre"] = All_Candidates_df["cluster_centre"].fillna(0).astype(bool)
 
-assert num_clusters == All_Candidates_df["cluster_centre"].sum()
-print(All_Candidates_df.head())
 
-reduced_Candidates_df = All_Candidates_df.loc[ All_Candidates_df["cluster_centre"] ]
-print(reduced_Candidates_df.head())
 
 m = folium.Map(
     location=[All_Candidates_df['lat'].mean(), All_Candidates_df['lon'].mean()],
