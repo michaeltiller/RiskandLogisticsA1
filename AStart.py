@@ -3,101 +3,24 @@ import pandas as pd
 import xpress as xp
 import platform
 from helper_funcs import *
-from pyproj import Transformer
 
-
-data_dir = "CaseStudyDataPY"
-transformer = Transformer.from_crs(
-    "EPSG:27700",
-    "EPSG:4326",
-    always_xy=True
-)
-
-Suppliers_df = pd.read_csv(f"{data_dir}/Suppliers.csv", index_col=0)
-
-PostcodeDistricts_df = pd.read_csv(f"{data_dir}/PostcodeDistricts.csv", index_col=0)
-PostcodeDistricts_df["lon"], PostcodeDistricts_df["lat"] = transformer.transform(
-    PostcodeDistricts_df["X (Easting)"].values,
-    PostcodeDistricts_df["Y (Northing)"].values
-)
-
-Candidates_df = pd.read_csv(f"{data_dir}/Candidates.csv", index_col=0)
-
-
-Candidates_df["lon"], Candidates_df["lat"] = transformer.transform(
-    Candidates_df["X (Easting)"].values,
-    Candidates_df["Y (Northing)"].values
-)
-# Maximum candidate index
-nbCandidates = Candidates_df.index.max()
-
-
-# -----------------------------------------------------------------------------
-# Read distance matrices
-# Supplier → District distances
-# District → District distances
-# Column names are converted from strings to integers for correct .loc indexing
-# -----------------------------------------------------------------------------
-DistanceSupplierDistrict_df = pd.read_csv(
-    f"{data_dir}/Distance Supplier-District.csv", index_col=0
-)
-DistanceSupplierDistrict_df.columns = DistanceSupplierDistrict_df.columns.astype(int)
-
-DistanceDistrictDistrict_df = pd.read_csv(
-    f"{data_dir}/Distance District-District.csv", index_col=0
-)
-DistanceDistrictDistrict_df.columns = DistanceDistrictDistrict_df.columns.astype(int)
-
-
-# -----------------------------------------------------------------------------
-# Read aggregate demand data (no time dimension)
-# Creates a dictionary keyed by (Customer, Product)
-# -----------------------------------------------------------------------------
-Demand_df = pd.read_csv(f"{data_dir}/Demand.csv")
-Demand = (
-    Demand_df
-        .set_index(["Customer", "Product"])["Demand"]
-        .to_dict()
-)
-Operating_costs = pd.read_csv(f"{data_dir}/Operating.csv", index_col=0)["Operating cost"].to_dict()
-
-# -----------------------------------------------------------------------------
-# Read demand data with time periods
-# Creates a dictionary keyed by (Customer, Product, Period)
-# -----------------------------------------------------------------------------
-DemandPeriods_df = pd.read_csv(f"{data_dir}/DemandPeriods.csv")
-DemandPeriods = (
-    DemandPeriods_df
-        .set_index(["Customer", "Product", "Period"])["Demand"]
-        .to_dict()
-)
-
-# Number of time periods
-nbPeriods = DemandPeriods_df["Period"].max()
-
-
-# -----------------------------------------------------------------------------
-# Read demand data with time periods and scenarios
-# Creates a dictionary keyed by (Customer, Product, Period, Scenario)
-# -----------------------------------------------------------------------------
-DemandPeriodsScenarios_df = pd.read_csv(f"{data_dir}/DemandPeriodScenarios.csv")
-DemandPeriodsScenarios = (
-    DemandPeriodsScenarios_df
-        .set_index(["Customer", "Product", "Period", "Scenario"])["Demand"]
-        .to_dict()
-)
-
-# Number of scenarios
-nbScenarios = DemandPeriodsScenarios_df["Scenario"].max()
-
+(
+    PostcodeDistricts_df, Candidates_df, Suppliers_df,
+    Demand, DemandPeriods_df, DemandPeriodsScenarios_df,
+    Operating_costs_df, DistanceSupplierDistrict_df, DistanceDistrictDistrict_df,
+    nbPeriods, nbScenarios
+) = get_all_data("CaseStudyDataPY")
 
 # =============================================================================
 # Index sets
 # =============================================================================
+#put the aggregation function here
+# and then aggregate demand from the clustered customers
 rng = np.random.RandomState(2026)
 Customers = rng.choice(PostcodeDistricts_df.index, size=60, replace=False)
-Candidates = rng.choice(Candidates_df.index, size =60, replace=False)
+Candidates = rng.choice(Candidates_df.index, size =40, replace=False)
 Suppliers = Suppliers_df.index
+
 # Suppliers  = rng.choice(Suppliers_df.index, size=10, replace=False)
 
 nbCustomers = len(Customers)
@@ -211,18 +134,33 @@ prob.addConstraint(
 )
 
 
-# We must meet all customer demands each year
+# We must meet all customer demands, each year
+
+##### i think the commented out part was wrong -please double check this
+##### Rereading the assignment it implies only one warehouse assigned to a customer
+##### "each customer can be served by a different warehouse in each period"
+# prob.addConstraint(
+#     xp.Sum(
+#         DemandPeriods_df[i,p,t] * x[i,j,t,p] 
+#         for i in Customers for j in Candidates for p in Products
+#     )
+#     >= 
+#     sum(
+#         DemandPeriods_df[i,p,t] 
+#         for i in Customers for p in Products
+#     )
+#     for t in Times
+# )
 prob.addConstraint(
     xp.Sum(
-        DemandPeriods[i,p,t]*x[i,j,t,p] 
-        for i in Customers for j in Candidates for t in Times for p in Products
+        x[i,j,t,p]
+        for j in Candidates
     )
-    >= 
-    sum(
-        DemandPeriods[i,p,t] 
-        for i in Customers for t in Times for p in Products
-    )
+    == 1
+    for i in Customers for p in Products for t in Times
 )
+
+
 # constrain that suppliers only supply their product type
 prob.addConstraint(
     z[k,j,t,p] == 0 
@@ -231,6 +169,7 @@ prob.addConstraint(
 )
 ######link warehouse stock supplier
 # a warehouse can deliver no more than what it has in stock
+# assuming no stock gets carried over into the next year because fuck that its too complicated
 prob.addConstraint(
     xp.Sum(
         Suppliers_df["Capacity"][k] * z[k,j,t,p]        #Into warehouse from suppliers
@@ -239,7 +178,7 @@ prob.addConstraint(
     )
     >=
     xp.Sum(
-        DemandPeriods[i,p,t] * x[i,j,t,p]              #Out of warehouse to customers
+        DemandPeriods_df[i,p,t] * x[i,j,t,p]              #Out of warehouse to customers
         for i in Customers                          
     )
     for p in Products for j in Candidates for t in Times
@@ -253,7 +192,7 @@ warehouse_setup_costs = xp.Sum(
     for j in Candidates
 )
 warehouse_operating_costs = xp.Sum(
-    Operating_costs[j]*y[j,t] 
+    Operating_costs_df[j]*y[j,t] 
     for j in Candidates for t in Times
 )
 supplier_to_warehouse_costs = xp.Sum(
@@ -261,7 +200,7 @@ supplier_to_warehouse_costs = xp.Sum(
     for k in Suppliers for j in Candidates for t in Times for p in Products
 )
 warehouse_to_customer_costs = xp.Sum(
-    CostCandidateCustomers[j,i] * DemandPeriods[i,p,t] * x[i,j,t,p]
+    CostCandidateCustomers[j,i] * DemandPeriods_df[i,p,t] * x[i,j,t,p]
     for i in Customers for j in Candidates for t in Times for p in Products
 )
 
