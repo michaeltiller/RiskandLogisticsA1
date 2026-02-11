@@ -69,17 +69,17 @@ def calcClusters(Demand_df, Candidates_df, num_clusters):
         {
             "lat": centermost_points.map(lambda x: x[0]),
             "lon": centermost_points.map(lambda x: x[1]),
-            "cluster_centre": 1
+            "is_cluster_centre": 1
         }
     )
     All_Candidates_df = Candidates_df.merge(right=centermost_points, how="left", on=["lon", "lat"])
     # one hot encode the clustre centres
-    All_Candidates_df["cluster_centre"] = All_Candidates_df["cluster_centre"].fillna(0).astype(bool)
+    All_Candidates_df["is_cluster_centre"] = All_Candidates_df["is_cluster_centre"].fillna(0).astype(bool)
     
-    assert num_clusters == All_Candidates_df["cluster_centre"].sum()
+    assert num_clusters == All_Candidates_df["is_cluster_centre"].sum()
     print(All_Candidates_df.head())
     
-    reduced_Candidates_df = All_Candidates_df.loc[ All_Candidates_df["cluster_centre"] ]
+    reduced_Candidates_df = All_Candidates_df.loc[ All_Candidates_df["is_cluster_centre"] ]
     print(reduced_Candidates_df.head())
     
     reduced_ids = list(reduced_Candidates_df['Candidate ID'])
@@ -105,11 +105,11 @@ m = folium.Map(
 for _, row in All_Candidates_df.iterrows():
     folium.CircleMarker(
         location=[row['lat'], row['lon']],
-        radius=4 if row["cluster_centre"] else 2,
-        color= "red" if row["cluster_centre"] else "blue",
+        radius=4 if row["is_cluster_centre"] else 2,
+        color= "red" if row["is_cluster_centre"] else "blue",
         fill=True,
         fill_color="green",
-        fill_opacity=1 if row["cluster_centre"] else 0.6,
+        fill_opacity=1 if row["is_cluster_centre"] else 0.6,
     ).add_to(m)
 m.show_in_browser()
 # m.save("clusteredloc.html")
