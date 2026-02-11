@@ -6,10 +6,22 @@ import numpy as np
 from pyproj import Transformer
 
 
-def get_basic_summary_sol(probs, xs,ys,zs):
+def get_basic_summary_sol(probs, xs,ys,zs, time_index, product_index, costs):
 
-    n_ware = len(ys.values())
-    print(f"{sum(v for v in ys.values()):,}/{n_ware} warehouses built")
+    setup, operating, sup_ware, ware_cust = costs
+    print("t\twarehouses operating, sup_ware, ware_cust")
+
+    for t in time_index:
+        print(t, end="\t")
+        n_ware_t = sum( v for k, v in ys.items() if k[1]==t )
+        print(n_ware_t, end="\t")
+
+        # the >8 means put it to the right within 8 spaces 
+        # the , means use comma seperation
+        # the .0f means no decimals
+        print(f"{operating[t]:>10,.0f} {sup_ware[t]:>8,.0f} {ware_cust[t]:>8,.0f}")
+    
+    print(f"setup costs were {setup:,.0f}")
 
 def put_solution_on_map(probs, xs, ys, zs, cand_gdf:gpd.GeoDataFrame, cust_gdf, supp_gdf,
                          time_index=range(1,10+1), product_index=[1,2,3,4]):
@@ -17,14 +29,15 @@ def put_solution_on_map(probs, xs, ys, zs, cand_gdf:gpd.GeoDataFrame, cust_gdf, 
     t =max(time_index)
     m = folium.Map(location=[cand_gdf['lat'].mean(), cand_gdf['lon'].mean()], zoom_start=7)
 
+    cand_jitter = (0,-.1) # need to move warehouses as they overlap with customers
+
     #show the warehouses 
     for j in cand_gdf.index:
 
         cust = cand_gdf.loc[j]
-        jitter = (0,-.1) # need to move warehouses as they overlap with customers
-        
+
         folium.Marker(
-            location= ( cust["lat"]+jitter[0], cust["lon"]+jitter[1] ),
+            location= ( cust["lat"]+cand_jitter[0], cust["lon"]+cand_jitter[1] ),
             icon=folium.Icon(
                 icon="warehouse",
                 prefix="fa",
@@ -36,7 +49,7 @@ def put_solution_on_map(probs, xs, ys, zs, cand_gdf:gpd.GeoDataFrame, cust_gdf, 
     #show the customers
     for i in cust_gdf.index:
         cust = cust_gdf.loc[i]
-        cust_loc = cust_gdf.loc[i,["lat","lon"]].values
+        cust_loc = cust_gdf.loc[i,["lat","lon"]].values 
         folium.Marker(
             location= cust_loc,
             icon=folium.Icon(
@@ -50,14 +63,16 @@ def put_solution_on_map(probs, xs, ys, zs, cand_gdf:gpd.GeoDataFrame, cust_gdf, 
         #show warehouse to customer links
         for j in cand_gdf.index:
             if max(xs[i,j,t,p] for p in product_index) > 0 :
-                # cust_lat, cust_lon  = cust_gdf.loc[i, ["lat", "lon"]]
-                ware_loc  = cand_gdf.loc[j, ["lat", "lon"]].values
+                
+                ware_loc  = cand_gdf.loc[j, ["lat", "lon"]].values + cand_jitter
+                txt = f"W{j} -> C{i}"
+                txt += "P"+ ",".join(str(p) for p in product_index if xs[i,j,t,p] )
 
                 folium.PolyLine(
                     locations=[cust_loc, ware_loc],
                     color="blue",
                     weight=3,
-                    tooltip=f"W{j} -> C{i}"
+                    tooltip=txt
                 ).add_to(m)
 
     m.show_in_browser()
@@ -80,7 +95,7 @@ def print_sol_status(solved_prob):
         best_obj = solved_prob.attributes.objval
         best_bound = solved_prob.attributes.bestbound
         mip_gap = abs(best_obj - best_bound) / (1e-10 +abs(best_obj))
-        print(f"Objval: {best_obj:,.0}\t MIP Gap: {mip_gap*100:.2f}%")
+        print(f"Objval: {int(best_obj):,}\t MIP Gap: {mip_gap*100:.2f}%")
 
     elif sol_status == xp.SolStatus.INFEASIBLE:
         print("Model is infeasible")
