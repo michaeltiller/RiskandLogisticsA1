@@ -17,11 +17,10 @@ from helper_funcs import *
 #put the aggregation function here
 # and then aggregate demand from the clustered customers
 rng = np.random.RandomState(2026)
-Customers = rng.choice(PostcodeDistricts_df.index, size=60, replace=False)
+Customers = rng.choice(PostcodeDistricts_df.index, size=40, replace=False)
 Candidates = rng.choice(Candidates_df.index, size =40, replace=False)
 Suppliers = Suppliers_df.index
 
-# Suppliers  = rng.choice(Suppliers_df.index, size=10, replace=False)
 
 nbCustomers = len(Customers)
 nbSuppliers = len(Suppliers)
@@ -160,6 +159,22 @@ prob.addConstraint(
     for i in Customers for p in Products for t in Times
 )
 
+# the z decision variables are percentages of supplier k's total stock of p sent to warehouse j at time t 
+# constrain them less than one and summing less than one
+prob.addConstraint(
+    z[k,j,t,p] <= 1
+    for k in Suppliers for j in Candidates for p in Products for t in Times
+)
+#this is necessary and implies the above
+# we can supply out 100% of stock at most
+prob.addConstraint(
+    xp.Sum(
+        z[k,j,t,p]
+        for j in Candidates
+    )
+    <= 1
+    for k in Suppliers for p in Products for t in Times
+)
 
 # constrain that suppliers only supply their product type
 prob.addConstraint(
@@ -167,22 +182,35 @@ prob.addConstraint(
     for k in Suppliers for j in Candidates for p in Products for t in Times
     if p != Suppliers_df["Product group"][k]
 )
+
 ######link warehouse stock supplier
 # a warehouse can deliver no more than what it has in stock
 # assuming no stock gets carried over into the next year because fuck that its too complicated
 prob.addConstraint(
     xp.Sum(
         Suppliers_df["Capacity"][k] * z[k,j,t,p]        #Into warehouse from suppliers
-        for k in Suppliers 
-        if Suppliers_df["Product group"][k] == p
+        for k in Suppliers for p in Products
+        # if Suppliers_df["Product group"][k] == p
     )
     >=
     xp.Sum(
         DemandPeriods_df[i,p,t] * x[i,j,t,p]              #Out of warehouse to customers
-        for i in Customers                          
+        for i in Customers  for p in Products                    
     )
-    for p in Products for j in Candidates for t in Times
+    for j in Candidates for t in Times
 )
+
+# a warehouse has a capacity
+prob.addConstraint(
+    xp.Sum(
+        Suppliers_df["Capacity"][k] * z[k,j,t,p]        #Into warehouse from suppliers
+        for k in Suppliers for p in Products
+    )
+    <= Candidates_df["Capacity"][j]                     #Warehouse capacity
+    for j in Candidates for t in Times
+)
+
+
 ######### Objective function
 #minimise costs
 #we know that if we build a warehouse it will be open in year 10
@@ -191,21 +219,46 @@ warehouse_setup_costs = xp.Sum(
     Candidates_df["Setup cost"][j]*y[j,final_t]
     for j in Candidates
 )
-warehouse_operating_costs = xp.Sum(
-    Operating_costs_df[j]*y[j,t] 
-    for j in Candidates for t in Times
-)
-supplier_to_warehouse_costs = xp.Sum(
-    CostSupplierCandidate[k,j] * Suppliers_df["Capacity"][k] * z[k,j,t,p]
-    for k in Suppliers for j in Candidates for t in Times for p in Products
-)
-warehouse_to_customer_costs = xp.Sum(
-    CostCandidateCustomers[j,i] * DemandPeriods_df[i,p,t] * x[i,j,t,p]
-    for i in Customers for j in Candidates for t in Times for p in Products
-)
+warehouse_operating_costs = {
+    t: xp.Sum(
+        Operating_costs_df[j]*y[j,t] 
+        for j in Candidates
+    )
+    for t in Times
+}
+# warehouse_operating_costs = xp.Sum(
+#     Operating_costs_df[j]*y[j,t] 
+#     for j in Candidates for t in Times
+# )
+supplier_to_warehouse_costs = {
+    t: xp.Sum(
+        CostSupplierCandidate[k,j] * Suppliers_df["Capacity"][k] * z[k,j,t,p]
+        for k in Suppliers for j in Candidates for p in Products
+    )
+    for t in Times
+}
+# supplier_to_warehouse_costs = xp.Sum(
+#     CostSupplierCandidate[k,j] * Suppliers_df["Capacity"][k] * z[k,j,t,p]
+#     for k in Suppliers for j in Candidates for t in Times for p in Products
+# )
+# warehouse_to_customer_costs = xp.Sum(
+#     CostCandidateCustomers[j,i] * DemandPeriods_df[i,p,t] * x[i,j,t,p]
+#     for i in Customers for j in Candidates for t in Times for p in Products
+# )
+warehouse_to_customer_costs = {
+    t: xp.Sum(
+        CostCandidateCustomers[j,i] * DemandPeriods_df[i,p,t] * x[i,j,t,p]
+        for i in Customers for j in Candidates for p in Products
+    )
+    for t in Times
+}
 
 prob.setObjective(
-    warehouse_setup_costs + warehouse_operating_costs + supplier_to_warehouse_costs + warehouse_to_customer_costs
+    warehouse_setup_costs + xp.Sum(
+    warehouse_operating_costs[t] + supplier_to_warehouse_costs[t] + warehouse_to_customer_costs[t]
+    for t in Times
+    )
+    ,sense = xp.minimize
 )
 
 xp.setOutputEnabled(False)
@@ -219,10 +272,15 @@ prob.solve()
 x = { k:int(v) for k,v in prob.getSolution(x).items() }   # if x is not binary change this !!!
 y = { k:int(v) for k,v in prob.getSolution(y).items() }
 z = prob.getSolution(z)
+costs = (warehouse_setup_costs, warehouse_operating_costs, supplier_to_warehouse_costs, warehouse_to_customer_costs)
+costs = map(
+    lambda v: prob.getSolution(v),
+    costs
+)
 
 print_sol_status(prob)
 
-get_basic_summary_sol(prob,xs=x, ys = y, zs=y)
+get_basic_summary_sol(prob,xs=x, ys = y, zs=y, time_index=Times, product_index=Products, costs=costs)
 
 put_solution_on_map(
     probs=prob,
