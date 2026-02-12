@@ -117,6 +117,20 @@ def calcClusters(Demand_df: pd.DataFrame, Candidates_df:pd.DataFrame, num_cluste
     
     # creates candidates, then also need seperate df which has demand per product type for each candidate # so are we still using 400 customers and just 60 candidate locations to build?
 
+def get_weighted_travel_costs(reduced_customers_df, cost_ware_cust, all_cust_df):
+
+    agg_cost_ware_cust = {
+        (j,central_cust): 0
+        for j,_ in cost_ware_cust 
+        for central_cust in reduced_customers_df.index 
+    }
+
+    for (j,i), cost in cost_ware_cust.items():
+        central_cust_for_i = reduced_customers_df.index.array[ all_cust_df.loc[i,"cluster label"] ]
+        agg_cost_ware_cust[j,central_cust_for_i] += cost
+
+    return agg_cost_ware_cust
+
 
 if __name__ == "__main__":
     # this was running when i imported calcClusters

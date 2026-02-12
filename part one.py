@@ -3,7 +3,8 @@ import pandas as pd
 import xpress as xp
 import platform
 from helper_funcs import *
-from clusteringdemand import calcClusters
+from clusteringdemand import calcClusters, get_weighted_travel_costs
+from time import perf_counter
 
 (
     PostcodeDistricts_df, Candidates_df, Suppliers_df,
@@ -23,11 +24,11 @@ from clusteringdemand import calcClusters
 
 ########## this is where it gets  confusing
 #cluster the warehouse locations 
-_, reduced_Candidates_df, _, _  = calcClusters(Demand_df, Candidates_df, num_clusters=20)
+_, reduced_Candidates_df, _, _  = calcClusters(Demand_df, Candidates_df, num_clusters=21)
 Candidates = reduced_Candidates_df.index
 
 #cluster the customer locations and take the aggregated demand
-_, reduced_Customers_df, _, DemandPeriods  = calcClusters(Demand_df, Candidates_df, num_clusters=20)
+all_Customers_df, reduced_Customers_df, _, DemandPeriods  = calcClusters(Demand_df, Candidates_df, num_clusters=20)
 Customers = reduced_Customers_df.index
 
 
@@ -106,6 +107,7 @@ CostCandidateCustomers = {
     for i in Customers
 }
 
+agg_ware_cust_travel_costs = get_weighted_travel_costs(reduced_Customers_df, CostCandidateCustomers, all_Customers_df)
 
 # =============================================================================
 # Build optimization model
@@ -114,7 +116,8 @@ CostCandidateCustomers = {
 if platform.system()== "Windows":
     xp.init('c:/xpressmp/bin/xpauth.xpr')
 else:
-    print("lmk if that annoying message is coming up")
+    print("lmk if that annoying message is coming up") #they did not lmk
+
 prob = xp.problem("Assignment 1")
 
 ######## Decision variables 
@@ -128,7 +131,7 @@ y = {
 }
 
 z = {
-    (k,j,t,p): prob.addVariable(name=f"Z__S{k}_W{j}_T{t}_P{p}")
+    (k,j,t,p): prob.addVariable(name=f"Z__S{k}_W{j}_T{t}_P{p}", ub=1) #maybe specifying to xpress that the upper bound is one will help things
     for k in Suppliers for j in Candidates for t in Times for p in Products
 }
 
@@ -146,22 +149,6 @@ prob.addConstraint(
 
 
 # We must meet all customer demands, each year
-
-##### i think the commented out part was wrong -please double check this
-##### Rereading the assignment it implies only one warehouse assigned to a customer
-##### "each customer can be served by a different warehouse in each period"
-# prob.addConstraint(
-#     xp.Sum(
-#         DemandPeriods_df[i,p,t] * x[i,j,t,p] 
-#         for i in Customers for j in Candidates for p in Products
-#     )
-#     >= 
-#     sum(
-#         DemandPeriods_df[i,p,t] 
-#         for i in Customers for p in Products
-#     )
-#     for t in Times
-# )
 prob.addConstraint(
     xp.Sum(
         x[i,j,t,p]
@@ -223,14 +210,17 @@ prob.addConstraint(
 )
 
 
-######### Objective function
+################################
+# Objective function
 #minimise costs
+#################################
 #we know that if we build a warehouse it will be open in year 10
 # so we can use year 10 to calculate fixed costs
 warehouse_setup_costs = xp.Sum(
     Candidates_df["Setup cost"][j]*y[j,final_t]
     for j in Candidates
 )
+
 warehouse_operating_costs = {
     t: xp.Sum(
         Operating_costs_df[j]*y[j,t] 
@@ -238,10 +228,7 @@ warehouse_operating_costs = {
     )
     for t in Times
 }
-# warehouse_operating_costs = xp.Sum(
-#     Operating_costs_df[j]*y[j,t] 
-#     for j in Candidates for t in Times
-# )
+
 supplier_to_warehouse_costs = {
     t: xp.Sum(
         CostSupplierCandidate[k,j] * Suppliers_df["Capacity"][k] * z[k,j,t,p]
@@ -249,24 +236,22 @@ supplier_to_warehouse_costs = {
     )
     for t in Times
 }
-# supplier_to_warehouse_costs = xp.Sum(
-#     CostSupplierCandidate[k,j] * Suppliers_df["Capacity"][k] * z[k,j,t,p]
-#     for k in Suppliers for j in Candidates for t in Times for p in Products
-# )
-# warehouse_to_customer_costs = xp.Sum(
-#     CostCandidateCustomers[j,i] * DemandPeriods_df[i,p,t] * x[i,j,t,p]
-#     for i in Customers for j in Candidates for t in Times for p in Products
-# )
+
 warehouse_to_customer_costs = {
     t: xp.Sum(
-        CostCandidateCustomers[j,i] * DemandPeriods[i,p,t] * x[i,j,t,p]
+        agg_ware_cust_travel_costs[j,i] * DemandPeriods[i,p,t] * x[i,j,t,p]
         for i in Customers for j in Candidates for p in Products
     )
     for t in Times
 }
 
+##################################
+#Solving
+##################################
+
+
 prob.setControl('miprelstop', .05) # stop once the mip gap is below 5%
-prob.controls.maxtime = -3*60 # stops after 3 mins
+prob.controls.maxtime = -60*3 # stops after 3 mins
 prob.setObjective(
     warehouse_setup_costs + xp.Sum(
     warehouse_operating_costs[t] + supplier_to_warehouse_costs[t] + warehouse_to_customer_costs[t]
@@ -276,8 +261,11 @@ prob.setObjective(
 )
 
 xp.setOutputEnabled(False)
+start_time = perf_counter()
 print("Solving")
 prob.solve()
+end_time = perf_counter()
+print(f"took {pretty_print_seconds(end_time-start_time)} for a problem with {prob.getAttrib('rows'):,} rows and {prob.getAttrib("cols"):,} columns")
 
 # =============================================================================
 # Post-processing and data visualisation

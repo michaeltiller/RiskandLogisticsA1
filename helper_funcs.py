@@ -6,6 +6,20 @@ import numpy as np
 from pyproj import Transformer
 
 
+def pretty_print_seconds(secs):
+    """I've used this a good bit"""
+
+    secs = int(secs) # perf_counter gives fractional seconds
+    if secs == 0:
+        return "0secs"
+    
+    mins, secs = divmod(secs, 60)
+    hours, mins = divmod(mins, 60)
+    return " ".join( f"{val}{name}" for name, val 
+                   in {"hours":hours, "mins":mins, "secs":secs}.items()
+                   if val !=0
+                   )
+
 def get_basic_summary_sol(probs, xs,ys,zs, time_index, product_index, costs):
 
     setup, operating, sup_ware, ware_cust = costs
@@ -29,15 +43,48 @@ def put_solution_on_map(probs, xs, ys, zs, cand_gdf:gpd.GeoDataFrame, cust_gdf, 
     t = max(time_index)
     m = folium.Map(location=[cand_gdf['lat'].mean(), cand_gdf['lon'].mean()], zoom_start=7)
 
-    cand_jitter = (0,-.1) # need to move warehouses as they overlap with customers
+    cand_jitter = np.array([0,-.1]) # need to move warehouses as they overlap with customers
+
+
+    #show the suppliers
+    for k in supp_gdf.index:
+
+        supp = supp_gdf.loc[k]
+        supp_loc = supp["lat"], supp["lon"]
+        folium.Marker(
+            location= supp_loc,
+            icon=folium.Icon(
+                icon="industry",
+                prefix="fa",
+                color= "green" if max(zs[k,j,t,p] for p in product_index for j in cand_gdf.index) else "white",
+                icon_color="black"
+            )
+        ).add_to(m)
+        
+        #show links to warehouses
+        for j in cand_gdf.index:
+            
+            if max(zs[k,j,t,p] for p in product_index) >0:
+
+                ware_loc  = cand_gdf.loc[j, ["lat", "lon"]].values + cand_jitter
+                txt = f"S{k} --"
+                txt += ",".join( str(p) for p in product_index if zs[k,j,t,p] )
+                txt += f"--> W{j}" 
+
+                folium.PolyLine(
+                    locations=[ware_loc, supp_loc],
+                    color="green" ,
+                    weight=2,
+                    tooltip=txt
+                ).add_to(m)
 
     #show the warehouses 
     for j in cand_gdf.index:
 
-        cust = cand_gdf.loc[j]
+        ware = cand_gdf.loc[j]
 
         folium.Marker(
-            location= ( cust["lat"]+cand_jitter[0], cust["lon"]+cand_jitter[1] ),
+            location= ( ware["lat"]+cand_jitter[0], ware["lon"]+cand_jitter[1] ),
             icon=folium.Icon(
                 icon="warehouse",
                 prefix="fa",
@@ -45,6 +92,7 @@ def put_solution_on_map(probs, xs, ys, zs, cand_gdf:gpd.GeoDataFrame, cust_gdf, 
                 icon_color="grey"
             )
         ).add_to(m)
+
 
     #show the customers
     for i in cust_gdf.index:
@@ -113,6 +161,10 @@ def get_all_data(data_dir="CaseStudyDataPY"):
     )
 
     Suppliers_df = pd.read_csv(f"{data_dir}/Suppliers.csv", index_col=0)
+    Suppliers_df["lon"], Suppliers_df["lat"] = transformer.transform(
+        Suppliers_df["X (Easting)"].values,
+        Suppliers_df["Y (Northing)"].values
+    )
 
     PostcodeDistricts_df = pd.read_csv(f"{data_dir}/PostcodeDistricts.csv", index_col=0)
 
