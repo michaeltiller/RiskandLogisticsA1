@@ -9,24 +9,24 @@ from pyproj import Transformer
 def get_basic_summary_sol(probs, xs,ys,zs, time_index, product_index, costs):
 
     setup, operating, sup_ware, ware_cust = costs
-    print("t\twarehouses operating, sup_ware, ware_cust")
+    print(f"t\tware\t{"operating":>10} {"supp->ware":>10} {"ware->cust":>10}")
+    # print("t\twarehouses operating, sup_ware, ware_cust")
 
     for t in time_index:
-        print(t, end="\t")
-        n_ware_t = sum( v for k, v in ys.items() if k[1]==t )
-        print(n_ware_t, end="\t")
 
-        # the >8 means put it to the right within 8 spaces 
+        n_ware_t = sum( v for k, v in ys.items() if k[1]==t )
+
+        # the >10 means put it to the right within 10 spaces 
         # the , means use comma seperation
         # the .0f means no decimals
-        print(f"{operating[t]:>10,.0f} {sup_ware[t]:>8,.0f} {ware_cust[t]:>8,.0f}")
+        print(f"{t}\t{n_ware_t:>3}\t{operating[t]:>10,.0f} {sup_ware[t]:>10,.0f} {ware_cust[t]:>10,.0f}")
     
     print(f"setup costs were {setup:,.0f}")
 
 def put_solution_on_map(probs, xs, ys, zs, cand_gdf:gpd.GeoDataFrame, cust_gdf, supp_gdf,
                          time_index=range(1,10+1), product_index=[1,2,3,4]):
     
-    t =max(time_index)
+    t = max(time_index)
     m = folium.Map(location=[cand_gdf['lat'].mean(), cand_gdf['lon'].mean()], zoom_start=7)
 
     cand_jitter = (0,-.1) # need to move warehouses as they overlap with customers
@@ -66,7 +66,7 @@ def put_solution_on_map(probs, xs, ys, zs, cand_gdf:gpd.GeoDataFrame, cust_gdf, 
                 
                 ware_loc  = cand_gdf.loc[j, ["lat", "lon"]].values + cand_jitter
                 txt = f"W{j} -> C{i}"
-                txt += "P"+ ",".join(str(p) for p in product_index if xs[i,j,t,p] )
+                txt += " P"+ ",".join(str(p) for p in product_index if xs[i,j,t,p] )
 
                 folium.PolyLine(
                     locations=[cust_loc, ware_loc],
