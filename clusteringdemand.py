@@ -108,11 +108,11 @@ def calcClusters(Demand_df: pd.DataFrame, Candidates_df:pd.DataFrame, num_cluste
     DemandPeriods_df = DemandPeriods_df.drop(columns="Customer")
 
     #make a dictionary out of it
-    DemandPeriods_df = DemandPeriods_df.to_dict()["Demand"]
+    DemandPeriods = DemandPeriods_df.to_dict()["Demand"]
 
     
     
-    return All_Candidates_df, reduced_Candidates_df, reduced_demand_df, DemandPeriods_df
+    return All_Candidates_df, reduced_Candidates_df, reduced_demand_df, DemandPeriods
     
     
     # creates candidates, then also need seperate df which has demand per product type for each candidate # so are we still using 400 customers and just 60 candidate locations to build?
