@@ -23,7 +23,7 @@ from clusteringdemand import calcClusters
 
 ########## this is where it gets  confusing
 #cluster the warehouse locations 
-_, reduced_Candidates_df, _, _  = calcClusters(Demand_df, Candidates_df, num_clusters=20)
+_, reduced_Candidates_df, _, _  = calcClusters(Demand_df, Candidates_df, num_clusters=40)
 Candidates = reduced_Candidates_df.index
 
 #cluster the customer locations and take the aggregated demand
@@ -265,7 +265,8 @@ warehouse_to_customer_costs = {
     for t in Times
 }
 
-prob.controls.maxtime = -60*3 # stops after 3 mins
+prob.setControl('miprelstop', .05) # stop once the mip gap is below 5%
+prob.controls.maxtime = -60 # stops after 3 mins
 prob.setObjective(
     warehouse_setup_costs + xp.Sum(
     warehouse_operating_costs[t] + supplier_to_warehouse_costs[t] + warehouse_to_customer_costs[t]
@@ -281,6 +282,8 @@ prob.solve()
 # =============================================================================
 # Post-processing and data visualisation
 # =============================================================================
+print_sol_status(prob)
+
 x = { k:int(v) for k,v in prob.getSolution(x).items() }   # if x is not binary change this !!!
 y = { k:int(v) for k,v in prob.getSolution(y).items() }
 z = prob.getSolution(z)
@@ -289,8 +292,6 @@ costs = map(
     lambda v: prob.getSolution(v),
     costs
 )
-
-print_sol_status(prob)
 
 get_basic_summary_sol(prob,xs=x, ys = y, zs=y, time_index=Times, product_index=Products, costs=costs)
 
