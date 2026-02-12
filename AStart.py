@@ -23,11 +23,11 @@ from clusteringdemand import calcClusters
 
 ########## this is where it gets  confusing
 #cluster the warehouse locations 
-_, reduced_Candidates_df, _, _  = calcClusters(Demand_df, Candidates_df, num_clusters=100)
+_, reduced_Candidates_df, _, _  = calcClusters(Demand_df, Candidates_df, num_clusters=20)
 Candidates = reduced_Candidates_df.index
 
 #cluster the customer locations and take the aggregated demand
-_, reduced_Customers_df, _, DemandPeriods  = calcClusters(Demand_df, Candidates_df, num_clusters=200)
+_, reduced_Customers_df, _, DemandPeriods  = calcClusters(Demand_df, Candidates_df, num_clusters=20)
 Customers = reduced_Customers_df.index
 
 
@@ -204,7 +204,7 @@ prob.addConstraint(
         for k in Suppliers for p in Products
         # if Suppliers_df["Product group"][k] == p
     )
-    ==
+    >=
     xp.Sum(
         DemandPeriods[i,p,t] * x[i,j,t,p]              #Out of warehouse to customers
         for i in Customers  for p in Products                    
@@ -266,7 +266,7 @@ warehouse_to_customer_costs = {
 }
 
 prob.setControl('miprelstop', .05) # stop once the mip gap is below 5%
-prob.controls.maxtime = -2*60 # stops after 3 mins
+prob.controls.maxtime = -3*60 # stops after 3 mins
 prob.setObjective(
     warehouse_setup_costs + xp.Sum(
     warehouse_operating_costs[t] + supplier_to_warehouse_costs[t] + warehouse_to_customer_costs[t]
