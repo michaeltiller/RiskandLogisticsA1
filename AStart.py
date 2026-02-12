@@ -3,10 +3,11 @@ import pandas as pd
 import xpress as xp
 import platform
 from helper_funcs import *
+from clusteringdemand import calcClusters
 
 (
     PostcodeDistricts_df, Candidates_df, Suppliers_df,
-    Demand, DemandPeriods_df, DemandPeriodsScenarios_df,
+    Demand_df, DemandPeriods, DemandPeriodsScenarios_df,
     Operating_costs_df, DistanceSupplierDistrict_df, DistanceDistrictDistrict_df,
     nbPeriods, nbScenarios
 ) = get_all_data("CaseStudyDataPY")
@@ -16,9 +17,20 @@ from helper_funcs import *
 # =============================================================================
 #put the aggregation function here
 # and then aggregate demand from the clustered customers
-rng = np.random.RandomState(2026)
-Customers = rng.choice(PostcodeDistricts_df.index, size=40, replace=False)
-Candidates = rng.choice(Candidates_df.index, size =40, replace=False)
+# rng = np.random.RandomState(2026)
+# Customers = rng.choice(PostcodeDistricts_df.index, size=40, replace=False)
+# Candidates = rng.choice(Candidates_df.index, size =40, replace=False)
+
+########## this is where it gets  confusing
+#cluster the warehouse locations 
+_, reduced_Candidates_df, _, _  = calcClusters(Demand_df, Candidates_df, num_clusters=20)
+Candidates = reduced_Candidates_df.index
+
+#cluster the customer locations and take the aggregated demand
+_, reduced_Customers_df, _, DemandPeriods  = calcClusters(Demand_df, Candidates_df, num_clusters=20)
+Customers = reduced_Customers_df.index
+
+
 Suppliers = Suppliers_df.index
 
 
@@ -194,7 +206,7 @@ prob.addConstraint(
     )
     >=
     xp.Sum(
-        DemandPeriods_df[i,p,t] * x[i,j,t,p]              #Out of warehouse to customers
+        DemandPeriods[i,p,t] * x[i,j,t,p]              #Out of warehouse to customers
         for i in Customers  for p in Products                    
     )
     for j in Candidates for t in Times
@@ -247,12 +259,13 @@ supplier_to_warehouse_costs = {
 # )
 warehouse_to_customer_costs = {
     t: xp.Sum(
-        CostCandidateCustomers[j,i] * DemandPeriods_df[i,p,t] * x[i,j,t,p]
+        CostCandidateCustomers[j,i] * DemandPeriods[i,p,t] * x[i,j,t,p]
         for i in Customers for j in Candidates for p in Products
     )
     for t in Times
 }
 
+prob.controls.maxtime = -60*3 # stops after 3 mins
 prob.setObjective(
     warehouse_setup_costs + xp.Sum(
     warehouse_operating_costs[t] + supplier_to_warehouse_costs[t] + warehouse_to_customer_costs[t]
@@ -263,7 +276,6 @@ prob.setObjective(
 
 xp.setOutputEnabled(False)
 print("Solving")
-prob.controls.maxtime = -60*3 # stops after 3 mins
 prob.solve()
 
 # =============================================================================

@@ -21,7 +21,7 @@ Demand_df = pd.read_csv(f"{data_dir}/Demand.csv")
 
 # map demand to the candidate location 
 
-def calcClusters(Demand_df, Candidates_df, num_clusters):
+def calcClusters(Demand_df: pd.DataFrame, Candidates_df:pd.DataFrame, num_clusters:int):
 
 
     demand_grouped = Demand_df.groupby('Customer')["Demand"].sum()
@@ -77,41 +77,69 @@ def calcClusters(Demand_df, Candidates_df, num_clusters):
     All_Candidates_df["is_cluster_centre"] = All_Candidates_df["is_cluster_centre"].fillna(0).astype(bool)
     
     assert num_clusters == All_Candidates_df["is_cluster_centre"].sum()
-    print(All_Candidates_df.head())
+    All_Candidates_df["cluster label"] = cluster_labels
     
     reduced_Candidates_df = All_Candidates_df.loc[ All_Candidates_df["is_cluster_centre"] ]
-    print(reduced_Candidates_df.head())
     
     reduced_ids = list(reduced_Candidates_df['Candidate ID'])
     
     reduced_demand_df = Demand_df[Demand_df['Customer'].isin(reduced_ids)]
+
+    # we need to aggregate demand per cluster across time
+    DemandPeriods_df = pd.read_csv(f"CaseStudyDataPY/DemandPeriods.csv")
+    #go from candidate to their cluster
+    map_cand_id_to_cluster_label = {
+         cand_id:label 
+         for cand_id, label in zip(All_Candidates_df["Candidate ID"], cluster_labels)
+    }
+    #get the cluster for each entry i.e customer time, period 
+    DemandPeriods_df["cluster label"] = DemandPeriods_df["Customer"].apply(lambda x: map_cand_id_to_cluster_label[x])
+   
+    DemandPeriods_df = DemandPeriods_df.astype(int)
+
+    #aggregate by CLUSTER, product and time
+    DemandPeriods_df = DemandPeriods_df.groupby(["cluster label", "Product", "Period"]).sum()
+
+    #then we switch from cluster to the cluster centre
+    DemandPeriods_df = DemandPeriods_df.rename(
+        level=0,
+        index = lambda cluster_label:reduced_Candidates_df.index.array[cluster_label] ) 
+    
+    DemandPeriods_df = DemandPeriods_df.drop(columns="Customer")
+
+    #make a dictionary out of it
+    DemandPeriods_df = DemandPeriods_df.to_dict()["Demand"]
+
     
     
-    return All_Candidates_df, reduced_Candidates_df, reduced_demand_df
+    return All_Candidates_df, reduced_Candidates_df, reduced_demand_df, DemandPeriods_df
     
     
     # creates candidates, then also need seperate df which has demand per product type for each candidate # so are we still using 400 customers and just 60 candidate locations to build?
-    
-All_Candidates_df, reduced_Candidates_df, reduced_demand_df = calcClusters(Demand_df, Candidates_df, num_clusters) 
+
+
+if __name__ == "__main__":
+    # this was running when i imported calcClusters
+    All_Candidates_df, reduced_Candidates_df, reduced_demand_df, _ = calcClusters(Demand_df, Candidates_df, num_clusters) 
 
 
 
 
-m = folium.Map(
-    location=[All_Candidates_df['lat'].mean(), All_Candidates_df['lon'].mean()],
-    zoom_start=13
-)
+    m = folium.Map(
+        location=[All_Candidates_df['lat'].mean(), All_Candidates_df['lon'].mean()],
+        zoom_start=13
+    )
 
-for _, row in All_Candidates_df.iterrows():
-    folium.CircleMarker(
-        location=[row['lat'], row['lon']],
-        radius=4 if row["is_cluster_centre"] else 2,
-        color= "red" if row["is_cluster_centre"] else "blue",
-        fill=True,
-        fill_color="green",
-        fill_opacity=1 if row["is_cluster_centre"] else 0.6,
-    ).add_to(m)
-m.show_in_browser()
-# m.save("clusteredloc.html")
+    for _, row in All_Candidates_df.iterrows():
+        folium.CircleMarker(
+            location=[row['lat'], row['lon']],
+            radius=4 if row["is_cluster_centre"] else 2,
+            color= "red" if row["is_cluster_centre"] else "blue",
+            fill=True,
+            fill_color="green",
+            fill_opacity=1 if row["is_cluster_centre"] else 0.6,
+        ).add_to(m)
+    m.show_in_browser()
+    m.save("clusteredloc.html")
 
 

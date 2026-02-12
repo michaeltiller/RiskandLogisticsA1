@@ -151,11 +151,6 @@ def get_all_data(data_dir="CaseStudyDataPY"):
     # Creates a dictionary keyed by (Customer, Product)
     # -----------------------------------------------------------------------------
     Demand_df = pd.read_csv(f"{data_dir}/Demand.csv")
-    Demand = (
-        Demand_df
-            .set_index(["Customer", "Product"])["Demand"]
-            .to_dict()
-    )
     Operating_costs_df = pd.read_csv(f"{data_dir}/Operating.csv", index_col=0)["Operating cost"].to_dict()
 
     # -----------------------------------------------------------------------------
@@ -185,7 +180,7 @@ def get_all_data(data_dir="CaseStudyDataPY"):
 
     return (
         PostcodeDistricts_df, Candidates_df, Suppliers_df,
-        Demand, DemandPeriods_df, DemandPeriodsScenarios_df,
+        Demand_df, DemandPeriods_df, DemandPeriodsScenarios_df,
         Operating_costs_df, DistanceSupplierDistrict_df, DistanceDistrictDistrict_df,
         nbPeriods, nbScenarios
     )
