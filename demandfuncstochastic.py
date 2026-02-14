@@ -116,11 +116,11 @@ def calcClustersv2(Demand_df: pd.DataFrame, Candidates_df:pd.DataFrame, DemandPe
     DemandPeriodsScenarios_df = DemandPeriodsScenarios_df.astype(int)
     DemandPeriodsScenarios_df = DemandPeriodsScenarios_df.groupby(["cluster label", "Product", "Period", "Scenario"]).sum()
     
-    scenarios = DemandPeriodsScenarios_df.index.get_level_values("Scenario")
+    # scenarios = DemandPeriodsScenarios_df.index.get_level_values("Scenario")
 
-    DemandPeriodsScenarios_df = DemandPeriodsScenarios_df[
-        (scenarios >= 1) & (scenarios <= 10)
-        ]
+    # DemandPeriodsScenarios_df = DemandPeriodsScenarios_df[
+    #     (scenarios >= 1) & (scenarios <= 10)
+    #     ]
     
     
     DemandPeriodsScenarios_df = DemandPeriodsScenarios_df.rename(
