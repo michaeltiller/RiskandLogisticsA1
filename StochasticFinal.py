@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Feb 12 16:02:58 2026
-
-@author: michael
-"""
-
 import numpy as np
 import pandas as pd
 import xpress as xp
@@ -13,6 +5,7 @@ import platform
 from helper_funcs import *
 from clusteringdemand import calcClusters
 from demandfuncstochastic import calcClustersv2
+from time import perf_counter
 
 (
     PostcodeDistricts_df, Candidates_df, Suppliers_df,
@@ -44,15 +37,14 @@ Suppliers = Suppliers_df.index
 
 
 
-
-
+Times = range(1, nbPeriods + 1)
+nbScenarios = 5
 nbCustomers = len(Customers)
 nbSuppliers = len(Suppliers)
 nbCandidates = len(Candidates)
-print(f"{nbCustomers=:,}\t{nbCandidates=:,}\t{nbSuppliers=:,}")
+print(f"{nbCustomers=:,}\t{nbCandidates=:,}\t{nbSuppliers=:,}\t{nbScenarios=:,}")
 
-Times = range(1, nbPeriods + 1)
-nbScenarios = 10
+
 
 Scenarios = range(1, nbScenarios + 1)
 Products = (1,2,3,4) #hardcoding
@@ -162,22 +154,6 @@ prob.addConstraint(
 
 
 # We must meet all customer demands, each year
-
-##### i think the commented out part was wrong -please double check this
-##### Rereading the assignment it implies only one warehouse assigned to a customer
-##### "each customer can be served by a different warehouse in each period"
-# prob.addConstraint(
-#     xp.Sum(
-#         DemandPeriods_df[i,p,t] * x[i,j,t,p] 
-#         for i in Customers for j in Candidates for p in Products
-#     )
-#     >= 
-#     sum(
-#         DemandPeriods_df[i,p,t] 
-#         for i in Customers for p in Products
-#     )
-#     for t in Times
-# )
 prob.addConstraint(
     xp.Sum(
         x[i,j,t,p, s]
@@ -189,11 +165,11 @@ prob.addConstraint(
 
 # the z decision variables are percentages of supplier k's total stock of p sent to warehouse j at time t 
 # constrain them less than one and summing less than one
+# and force them to zero if the supplier doesnt supply that product
 prob.addConstraint(
-    z[k,j,t,p, s] <= 1
+    z[k,j,t,p, s] <= int( p == Suppliers_df["Product group"][k] )
     for k in Suppliers for j in Candidates for p in Products for t in Times for s in Scenarios
 )
-#this is necessary and implies the above
 # we can supply out 100% of stock at most
 prob.addConstraint(
     xp.Sum(
@@ -203,26 +179,23 @@ prob.addConstraint(
     <= 1
     for k in Suppliers for p in Products for t in Times for s in Scenarios
 )
-
-# constrain that suppliers only supply their product type
-prob.addConstraint(
-    z[k,j,t,p, s] == 0 
-    for k in Suppliers for j in Candidates for p in Products for t in Times for s in Scenarios
-    if p != Suppliers_df["Product group"][k]
-)
+# we only supply to open warehouses
+# prob.addConstraint(
+#     z[k,j,t,p,s] <= y[j,t]
+#     for t in Times for k in Suppliers for j in Candidates for p in Products for s in Scenarios
+# )
 
 ######link warehouse stock supplier
 # a warehouse can deliver no more than what it has in stock
 # assuming no stock gets carried over into the next year because fuck that its too complicated
-#Double check where the for s goes 
+#Double check where the for s goes #ND looks good
 prob.addConstraint(
     xp.Sum(
         Suppliers_df["Capacity"][k] * z[k,j,t,p, s]        #Into warehouse from suppliers
         for k in Suppliers for p in Products
-        # if Suppliers_df["Product group"][k] == p
     )
-    >=
-    0.5 * (xp.Sum(
+    ==
+    1*(xp.Sum(
         DemandPeriodsScenarios[i,p,t,s] * x[i,j,t,p, s]             #Out of warehouse to customers
         for i in Customers  for p in Products               
     ) )
@@ -287,8 +260,12 @@ prob.setObjective(
 )
 
 xp.setOutputEnabled(False)
-print("Solving")
+start_time = perf_counter()
+print(f"Solving a problem with {prob.getAttrib('rows'):,} rows and {prob.getAttrib("cols"):,} columns")
 prob.solve()
+end_time = perf_counter()
+print(f"took {pretty_print_seconds(end_time-start_time)} for a problem with {prob.getAttrib('rows'):,} rows and {prob.getAttrib("cols"):,} columns")
+
 
 # =============================================================================
 # Post-processing and data visualisation
@@ -336,6 +313,7 @@ product_index=Products
 
 
 t = max(time_index)
+s=nbScenarios
 m = folium.Map(location=[cand_gdf['lat'].mean(), cand_gdf['lon'].mean()], zoom_start=7)
 
 cand_jitter = np.array([0,-.1]) # need to move warehouses as they overlap with customers
@@ -351,7 +329,7 @@ for k in supp_gdf.index:
         icon=folium.Icon(
             icon="industry",
             prefix="fa",
-            color= "green" if max(zs[k,j,t,p] for p in product_index for j in cand_gdf.index) else "white",
+            color= "green" if max(zs[k,j,t,p,s] for p in product_index for j in cand_gdf.index) else "white",
             icon_color="black"
         )
     ).add_to(m)
