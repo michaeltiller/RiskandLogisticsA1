@@ -12,6 +12,7 @@ import xpress as xp
 import platform
 from helper_funcs import *
 from clusteringdemand import calcClusters
+from demandfuncstochastic import calcClustersv2
 
 (
     PostcodeDistricts_df, Candidates_df, Suppliers_df,
