@@ -3,7 +3,7 @@ import pandas as pd
 import xpress as xp
 import platform
 from helper_funcs import *
-from clusteringdemand import calcClusters, get_weighted_travel_costs
+from clusteringdemand import *
 from time import perf_counter
 
 (
@@ -12,39 +12,6 @@ from time import perf_counter
     Operating_costs_df, DistanceSupplierDistrict_df, DistanceDistrictDistrict_df,
     nbPeriods, nbScenarios
 ) = get_all_data("CaseStudyDataPY")
-
-# =============================================================================
-# Index sets
-# =============================================================================
-#put the aggregation function here
-# and then aggregate demand from the clustered customers
-# rng = np.random.RandomState(2026)
-# Customers = rng.choice(PostcodeDistricts_df.index, size=40, replace=False)
-# Candidates = rng.choice(Candidates_df.index, size =40, replace=False)
-
-########## this is where it gets  confusing
-#cluster the warehouse locations 
-_, reduced_Candidates_df, _, _  = calcClusters(Demand_df, Candidates_df, num_clusters=60)
-Candidates = reduced_Candidates_df.index
-
-#cluster the customer locations and take the aggregated demand
-all_Customers_df, reduced_Customers_df, _, DemandPeriods  = calcClusters(Demand_df, Candidates_df, num_clusters=200)
-Customers = reduced_Customers_df.index
-
-
-Suppliers = Suppliers_df.index
-
-
-nbCustomers = len(Customers)
-nbSuppliers = len(Suppliers)
-nbCandidates = len(Candidates)
-print(f"{nbCustomers=:,}\t{nbCandidates=:,}\t{nbSuppliers=:,}")
-
-Times = range(1, nbPeriods + 1)
-Scenarios = range(1, nbScenarios + 1)
-Products = (1,2,3,4) #hardcoding
-final_t = max(Times)
-
 
 
 # =============================================================================
@@ -92,8 +59,8 @@ CostSupplierCandidate = {
         Suppliers_df.loc[k, "Vehicle type"]
     ]
     / 1000
-    for j in Candidates
-    for k in Suppliers
+    for j in Candidates_df.index
+    for k in Suppliers_df.index
 }
 
 # Cost from candidate facilities to customers
@@ -103,9 +70,51 @@ CostCandidateCustomers = {
     * DistanceDistrictDistrict_df.loc[j, i]
     * VehicleCostPerMileAndTonneOverall[3]
     / 1000
-    for j in Candidates
-    for i in Customers
+    for j in Candidates_df.index
+    for i in Candidates_df.index
 }
+
+# =============================================================================
+# Index sets
+# =============================================================================
+#put the aggregation function here
+# and then aggregate demand from the clustered customers
+# rng = np.random.RandomState(2026)
+# Customers = rng.choice(PostcodeDistricts_df.index, size=40, replace=False)
+# Candidates = rng.choice(Candidates_df.index, size =40, replace=False)
+
+#cluster the customer locations and take the aggregated demand
+all_Customers_df, reduced_Customers_df, _, DemandPeriods  = calcClusters(Demand_df, Candidates_df, num_clusters=60)
+Customers = reduced_Customers_df.index
+
+########## this is where it gets  confusing
+#cluster the warehouse locations 
+num_warehouses = 60
+
+# sub_start = perf_counter() 
+# print(f"solving subproblem of finding {num_warehouses} warehouses which have minimal transport cost")
+# reduced_warehouses_index = aggregate_warehouses_subproblem(num_warehouses, Candidates_df.index, Customers, CostCandidateCustomers )
+# sub_end = perf_counter()
+# print(f"subproblem took {pretty_print_seconds(sub_end-sub_start)}")
+# Candidates = reduced_warehouses_index
+
+_, reduced_Candidates_df, _, _  = calcClusters(Demand_df, Candidates_df, num_clusters=num_warehouses)
+Candidates = reduced_Candidates_df.index
+
+
+Suppliers = Suppliers_df.index
+
+
+nbCustomers = len(Customers)
+nbSuppliers = len(Suppliers)
+nbCandidates = len(Candidates)
+print(f"{nbCustomers=:,}\t{nbCandidates=:,}\t{nbSuppliers=:,}")
+
+Times = range(1, nbPeriods + 1)
+Scenarios = range(1, nbScenarios + 1)
+Products = (1,2,3,4) #hardcoding
+final_t = max(Times)
+
 
 agg_ware_cust_travel_costs = get_weighted_travel_costs(reduced_Customers_df, CostCandidateCustomers, all_Customers_df)
 
@@ -258,7 +267,7 @@ warehouse_to_customer_costs = {
 
 
 prob.setControl('miprelstop', .05) # stop once the mip gap is below 5%
-prob.controls.maxtime = -60*10 # stops after 3 mins
+prob.controls.maxtime = -60*20 
 prob.setObjective(
     warehouse_setup_costs + xp.Sum(
     warehouse_operating_costs[t] + supplier_to_warehouse_costs[t] + warehouse_to_customer_costs[t]
@@ -269,7 +278,7 @@ prob.setObjective(
 
 xp.setOutputEnabled(False)
 start_time = perf_counter()
-print("Solving")
+print(f"Solving a problem with {prob.getAttrib('rows'):,} rows and {prob.getAttrib("cols"):,} columns")
 prob.solve()
 end_time = perf_counter()
 print(f"took {pretty_print_seconds(end_time-start_time)} for a problem with {prob.getAttrib('rows'):,} rows and {prob.getAttrib("cols"):,} columns")
