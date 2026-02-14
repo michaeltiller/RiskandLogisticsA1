@@ -37,6 +37,19 @@ def get_basic_summary_sol(probs, xs,ys,zs, time_index, product_index, costs):
     
     print(f"setup costs were {setup:,.0f}")
 
+    operating = sum(operating[t] for t in time_index)
+    sup_ware = sum(sup_ware[t] for t in time_index)
+    ware_cust = sum(ware_cust[t] for t in time_index)
+
+    total_cost = setup + operating +ware_cust+ sup_ware
+    
+    print(f"{total_cost=:,.0f} is broken into")
+    print(f"{"operating":<20}:{operating/total_cost:>10,.0%}")
+    print(f"{"setup":<20}:{setup/total_cost:>10,.0%}")
+    print(f"{"supplier->warehouse":<20}:{sup_ware/total_cost:>10,.0%}")
+    print(f"{"warehouse->customer":<20}:{ware_cust/total_cost:>10,.0%}")
+
+
 def put_solution_on_map(probs, xs, ys, zs, cand_gdf:gpd.GeoDataFrame, cust_gdf, supp_gdf,
                          time_index=range(1,10+1), product_index=[1,2,3,4]):
     
@@ -48,80 +61,105 @@ def put_solution_on_map(probs, xs, ys, zs, cand_gdf:gpd.GeoDataFrame, cust_gdf, 
 
     #show the suppliers
     for k in supp_gdf.index:
+        if max(zs[k,j,t,p] for p in product_index for j in cand_gdf.index):
 
-        supp = supp_gdf.loc[k]
-        supp_loc = supp["lat"], supp["lon"]
-        folium.Marker(
-            location= supp_loc,
-            icon=folium.Icon(
-                icon="industry",
-                prefix="fa",
-                color= "green" if max(zs[k,j,t,p] for p in product_index for j in cand_gdf.index) else "white",
-                icon_color="black"
-            )
-        ).add_to(m)
+            supp = supp_gdf.loc[k]
+            supp_loc = supp["lat"], supp["lon"]
+                        
+            folium.CircleMarker(
+                location=supp_loc,
+                radius=4,
+                color="green",
+                fill=True,
+                fill_color="green",
+                fill_opacity=1
+            ).add_to(m)
+            # folium.Marker(
+            #     location= supp_loc,
+            #     icon=folium.Icon(
+            #         icon="industry",
+            #         prefix="fa",
+            #         color= "green" if max(zs[k,j,t,p] for p in product_index for j in cand_gdf.index) else "white",
+            #         icon_color="black"
+            #     )
+            # ).add_to(m)
         
-        #show links to warehouses
-        for j in cand_gdf.index:
+        # #show links to warehouses
+        # for j in cand_gdf.index:
             
-            if max(zs[k,j,t,p] for p in product_index) >0:
+        #     if max(zs[k,j,t,p] for p in product_index) >0:
 
-                ware_loc  = cand_gdf.loc[j, ["lat", "lon"]].values + cand_jitter
-                txt = f"S{k} --"
-                txt += ",".join( str(p) for p in product_index if zs[k,j,t,p] )
-                txt += f"--> W{j}" 
+        #         ware_loc  = cand_gdf.loc[j, ["lat", "lon"]].values + cand_jitter
+        #         txt = f"S{k} --"
+        #         txt += ",".join( str(p) for p in product_index if zs[k,j,t,p] )
+        #         txt += f"--> W{j}" 
 
-                folium.PolyLine(
-                    locations=[ware_loc, supp_loc],
-                    color="green" ,
-                    weight=2,
-                    tooltip=txt
-                ).add_to(m)
+        #         folium.PolyLine(
+        #             locations=[ware_loc, supp_loc],
+        #             color="green" ,
+        #             weight=2,
+        #             tooltip=txt
+        #         ).add_to(m)
 
     #show the warehouses 
     for j in cand_gdf.index:
-
-        ware = cand_gdf.loc[j]
-
-        folium.Marker(
-            location= ( ware["lat"]+cand_jitter[0], ware["lon"]+cand_jitter[1] ),
-            icon=folium.Icon(
-                icon="warehouse",
-                prefix="fa",
-                color= "red" if ys[j,t] else "white", 
-                icon_color="grey"
-            )
-        ).add_to(m)
+        if ys[j,t]:
+            ware = cand_gdf.loc[j]
+            
+            folium.CircleMarker(
+                location=(ware["lat"]+cand_jitter[0], ware["lon"]+cand_jitter[1]),
+                radius=4,
+                color="red",
+                fill=True,
+                fill_color="red",
+                fill_opacity=1
+            ).add_to(m)
+            # folium.Marker(
+            #     location= ( ware["lat"]+cand_jitter[0], ware["lon"]+cand_jitter[1] ),
+            #     icon=folium.Icon(
+            #         icon="warehouse",
+            #         prefix="fa",
+            #         color= "red" if ys[j,t] else "white", 
+            #         icon_color="grey"
+            #     )
+            # ).add_to(m)
 
 
     #show the customers
     for i in cust_gdf.index:
         cust = cust_gdf.loc[i]
         cust_loc = cust_gdf.loc[i,["lat","lon"]].values 
-        folium.Marker(
-            location= cust_loc,
-            icon=folium.Icon(
-                icon="house",
-                prefix="fa",
-                color= "blue",
-                icon_color="grey"
-            )
+        folium.CircleMarker(
+            location=cust_loc,
+            radius=4,
+            color="blue",
+            fill=True,
+            fill_color="blue",
+            fill_opacity=1
+        # folium.Marker(
+        #     location= cust_loc,
+            # icon=folium.Icon(
+            #     icon="house",
+            #     prefix="fa",
+            #     color= "blue",
+            #     icon_color="grey"
+            # )
         ).add_to(m)   
 
-        #show warehouse to customer links
-        for j in cand_gdf.index:
-            if max(xs[i,j,t,p] for p in product_index) > 0 :
+        # #show warehouse to customer links
+        # for j in cand_gdf.index:
+        #     if max(xs[i,j,t,p] for p in product_index) > 0 :
                 
-                ware_loc  = cand_gdf.loc[j, ["lat", "lon"]].values + cand_jitter
-                txt = f"W{j} -> C{i}"
-                txt += " P"+ ",".join(str(p) for p in product_index if xs[i,j,t,p] )
+        #         ware_loc  = cand_gdf.loc[j, ["lat", "lon"]].values + cand_jitter
+        #         txt = f"W{j} -> C{i}"
+        #         txt += " P"+ ",".join(str(p) for p in product_index if xs[i,j,t,p] )
 
-                folium.PolyLine(
-                    locations=[cust_loc, ware_loc],
-                    color="blue",
-                    weight=3,
-                    tooltip=txt
-                ).add_to(m)
+        #         folium.PolyLine(
+        #             locations=[cust_loc, ware_loc],
+        #             color="blue",
+        #             weight=3,
+        #             tooltip=txt
+        #         ).add_to(m)
 
     m.show_in_browser()
 
@@ -131,19 +169,18 @@ def put_solution_on_map(probs, xs, ys, zs, cand_gdf:gpd.GeoDataFrame, cust_gdf, 
 def print_sol_status(solved_prob):
     sol_status = solved_prob.attributes.solstatus
 
-    if sol_status == xp.SolStatus.OPTIMAL:
-        print("Optimal solution found")
-        best_obj = solved_prob.attributes.objval
-        best_bound = solved_prob.attributes.bestbound
-        mip_gap = abs(best_obj - best_bound) / (1e-10 +abs(best_obj))
-        print(f"Objval: {best_obj:,.0}\t MIP Gap: {mip_gap*100:.2f}%")
+    if sol_status in( xp.SolStatus.OPTIMAL, xp.SolStatus.FEASIBLE):
+        if sol_status ==  xp.SolStatus.OPTIMAL:
+            print("Optimal solution found")
+        else:
+            print("Feasible solution (not proven optimal)")
         
-    elif sol_status == xp.SolStatus.FEASIBLE:
-        print("Feasible solution (not proven optimal)")
         best_obj = solved_prob.attributes.objval
         best_bound = solved_prob.attributes.bestbound
         mip_gap = abs(best_obj - best_bound) / (1e-10 +abs(best_obj))
-        print(f"Objval: {int(best_obj):,}\t MIP Gap: {mip_gap*100:.2f}%")
+        print(f"Objval: {best_obj:,.0f}\t MIP Gap: {mip_gap*100:.2f}%")
+        
+
 
     elif sol_status == xp.SolStatus.INFEASIBLE:
         print("Model is infeasible")
