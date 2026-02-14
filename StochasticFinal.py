@@ -35,7 +35,7 @@ _, reduced_Candidates_df, _, _, _  = calcClustersv2(Demand_df, Candidates_df,Dem
 Candidates = reduced_Candidates_df.index
 
 #cluster the customer locations and take the aggregated demand
-_, reduced_Customers_df, _, _, DemandPeriodsScenarios  = calcClustersv2(Demand_df, Candidates_df,DemandPeriodsScenarios_df, num_clusters=20)
+_, reduced_Customers_df, _, _, DemandPeriodsScenarios  = calcClustersv2(Demand_df, Candidates_df,DemandPeriodsScenarios_df, num_clusters=30)
 Customers = reduced_Customers_df.index
 
 
@@ -143,8 +143,8 @@ y = {
 }
 
 z = {
-    (k,j,t,p): prob.addVariable(name=f"Z__S{k}_W{j}_T{t}_P{p}")
-    for k in Suppliers for j in Candidates for t in Times for p in Products
+    (k,j,t,p, s): prob.addVariable(name=f"Z__S{k}_W{j}_T{t}_P{p}_S{s}")
+    for k in Suppliers for j in Candidates for t in Times for p in Products for s in Scenarios
 }
 
 ########### Constraints
@@ -189,52 +189,53 @@ prob.addConstraint(
 # the z decision variables are percentages of supplier k's total stock of p sent to warehouse j at time t 
 # constrain them less than one and summing less than one
 prob.addConstraint(
-    z[k,j,t,p] <= 1
-    for k in Suppliers for j in Candidates for p in Products for t in Times
+    z[k,j,t,p, s] <= 1
+    for k in Suppliers for j in Candidates for p in Products for t in Times for s in Scenarios
 )
 #this is necessary and implies the above
 # we can supply out 100% of stock at most
 prob.addConstraint(
     xp.Sum(
-        z[k,j,t,p]
+        z[k,j,t,p, s]
         for j in Candidates
     )
     <= 1
-    for k in Suppliers for p in Products for t in Times
+    for k in Suppliers for p in Products for t in Times for s in Scenarios
 )
 
 # constrain that suppliers only supply their product type
 prob.addConstraint(
-    z[k,j,t,p] == 0 
-    for k in Suppliers for j in Candidates for p in Products for t in Times
+    z[k,j,t,p, s] == 0 
+    for k in Suppliers for j in Candidates for p in Products for t in Times for s in Scenarios
     if p != Suppliers_df["Product group"][k]
 )
 
 ######link warehouse stock supplier
 # a warehouse can deliver no more than what it has in stock
 # assuming no stock gets carried over into the next year because fuck that its too complicated
+#Double check where the for s goes 
 prob.addConstraint(
     xp.Sum(
-        Suppliers_df["Capacity"][k] * z[k,j,t,p]        #Into warehouse from suppliers
+        Suppliers_df["Capacity"][k] * z[k,j,t,p, s]        #Into warehouse from suppliers
         for k in Suppliers for p in Products
         # if Suppliers_df["Product group"][k] == p
     )
     >=
-    0.1 * (xp.Sum(
+    0.5 * (xp.Sum(
         DemandPeriodsScenarios[i,p,t,s] * x[i,j,t,p, s]             #Out of warehouse to customers
-        for i in Customers  for p in Products for s in Scenarios                 
+        for i in Customers  for p in Products               
     ) )
-    for j in Candidates for t in Times
+    for j in Candidates for t in Times for s in Scenarios
 )
 
 # a warehouse has a capacity
 prob.addConstraint(
     xp.Sum(
-        Suppliers_df["Capacity"][k] * z[k,j,t,p]        #Into warehouse from suppliers
+        Suppliers_df["Capacity"][k] * z[k,j,t,p, s]        #Into warehouse from suppliers
         for k in Suppliers for p in Products
     )
     <= Candidates_df["Capacity"][j]                     #Warehouse capacity
-    for j in Candidates for t in Times
+    for j in Candidates for t in Times for s in Scenarios
 )
 
 
@@ -258,9 +259,8 @@ warehouse_operating_costs = {
 supplier_to_warehouse_costs = {
     t: xp.Sum(
         1/nbScenarios * (
-        
-        CostSupplierCandidate[k,j] * Suppliers_df["Capacity"][k] * z[k,j,t,p] ) 
-        for k in Suppliers for j in Candidates for p in Products
+        CostSupplierCandidate[k,j] * Suppliers_df["Capacity"][k] * z[k,j,t,p,s] ) 
+        for k in Suppliers for j in Candidates for p in Products for s in Scenarios
     )
     for t in Times
 }
