@@ -24,11 +24,11 @@ from time import perf_counter
 
 ########## this is where it gets  confusing
 #cluster the warehouse locations 
-_, reduced_Candidates_df, _, _  = calcClusters(Demand_df, Candidates_df, num_clusters=21)
+_, reduced_Candidates_df, _, _  = calcClusters(Demand_df, Candidates_df, num_clusters=60)
 Candidates = reduced_Candidates_df.index
 
 #cluster the customer locations and take the aggregated demand
-all_Customers_df, reduced_Customers_df, _, DemandPeriods  = calcClusters(Demand_df, Candidates_df, num_clusters=20)
+all_Customers_df, reduced_Customers_df, _, DemandPeriods  = calcClusters(Demand_df, Candidates_df, num_clusters=200)
 Customers = reduced_Customers_df.index
 
 
@@ -146,7 +146,13 @@ prob.addConstraint(
     y[j,t] <= y[j,t+1]
     for j in Candidates for t in Times if t != max(Times)
 )
-
+if nbCandidates >30:
+    prob.addConstraint(
+        xp.Sum( y[j,t] for j in Candidates)
+        <=
+        nbCandidates//2
+        for t in Times 
+    )
 
 # We must meet all customer demands, each year
 prob.addConstraint(
@@ -159,12 +165,13 @@ prob.addConstraint(
 )
 
 # the z decision variables are percentages of supplier k's total stock of p sent to warehouse j at time t 
-# constrain them less than one and summing less than one
+# constrain them less than one
+# and force them to zero if the supplier doesnt supply that product
 prob.addConstraint(
-    z[k,j,t,p] <= 1
+    z[k,j,t,p] <= int( p == Suppliers_df["Product group"][k] )
     for k in Suppliers for j in Candidates for p in Products for t in Times
 )
-#this is necessary and implies the above
+
 # we can supply out 100% of stock at most
 prob.addConstraint(
     xp.Sum(
@@ -174,13 +181,13 @@ prob.addConstraint(
     <= 1
     for k in Suppliers for p in Products for t in Times
 )
-
-# constrain that suppliers only supply their product type
+# we only supply to open warehouses
 prob.addConstraint(
-    z[k,j,t,p] == 0 
-    for k in Suppliers for j in Candidates for p in Products for t in Times
-    if p != Suppliers_df["Product group"][k]
+    z[k,j,t,p] <= y[j,t]
+    for t in Times for k in Suppliers for j in Candidates for p in Products
 )
+
+
 
 ######link warehouse stock supplier
 # a warehouse can deliver no more than what it has in stock
@@ -251,7 +258,7 @@ warehouse_to_customer_costs = {
 
 
 prob.setControl('miprelstop', .05) # stop once the mip gap is below 5%
-prob.controls.maxtime = -60*3 # stops after 3 mins
+prob.controls.maxtime = -60*10 # stops after 3 mins
 prob.setObjective(
     warehouse_setup_costs + xp.Sum(
     warehouse_operating_costs[t] + supplier_to_warehouse_costs[t] + warehouse_to_customer_costs[t]
