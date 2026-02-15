@@ -31,11 +31,11 @@ from clusteringdemand import calcClusters
 
 ########## this is where it gets  confusing
 #cluster the warehouse locations 
-_, reduced_Candidates_df, _, _, _  = calcClustersv2(Demand_df, Candidates_df,DemandPeriodsScenarios_df, num_clusters=30)
+_, reduced_Candidates_df, _, _, _,_  = calcClustersv2(Demand_df, Candidates_df,DemandPeriodsScenarios_df, num_clusters=30)
 Candidates = reduced_Candidates_df.index
 
 #cluster the customer locations and take the aggregated demand
-_, reduced_Customers_df, _, _, DemandPeriodsScenarios  = calcClustersv2(Demand_df, Candidates_df,DemandPeriodsScenarios_df, num_clusters=30)
+_, reduced_Customers_df, _, _, DemandPeriodsScenarios, avg_DemandPeriodsScenarios  = calcClustersv2(Demand_df, Candidates_df,DemandPeriodsScenarios_df, num_clusters=30)
 Customers = reduced_Customers_df.index
 
 
@@ -49,7 +49,7 @@ nbCandidates = len(Candidates)
 print(f"{nbCustomers=:,}\t{nbCandidates=:,}\t{nbSuppliers=:,}")
 
 Times = range(1, nbPeriods + 1)
-nbScenarios = 10
+nbScenarios = max(k[3] for k in DemandPeriodsScenarios)
 
 Scenarios = range(1, nbScenarios + 1)
 Products = (1,2,3,4) #hardcoding
@@ -301,6 +301,9 @@ prob.solve()
 # =============================================================================
 # Post-processing and data visualisation
 # =============================================================================
+
+obj_2sp = prob.attributes.objval
+
 print_sol_status(prob)
 
 #x = { k:int(v) for k,v in prob.getSolution(x).items() }   # if x is not binary change this !!!
@@ -403,6 +406,182 @@ for i in cust_gdf.index:
 
 m.show_in_browser()
 
+### Computing VSS #### #####################
+
+# just need to replicate the deterministic demand except take mean by scenario 
+
+# needs to be named DemandPeriods_mv
 
 
 
+##### Solve the deterministic model using average scenario values 
+
+mvprob = xp.problem("Mean value problem")
+
+######## Decision variables 
+
+
+x_mv = {
+    (i,j,t,p): mvprob.addVariable(name=f"X__C{i}_W{j}_T{t}_P{p}", vartype=xp.binary)
+    for i in Customers for j in Candidates for t in Times for p in Products
+}
+y_mv = {
+    (j,t): mvprob.addVariable(name=f"Y__W{j}_T{t}", vartype = xp.binary)
+    for j in Candidates for t in Times
+}
+
+z_mv = {
+    (k,j,t,p): mvprob.addVariable(name=f"Z__S{k}_W{j}_T{t}_P{p}", ub=1) #maybe specifying to xpress that the upper bound is one will help things
+    for k in Suppliers for j in Candidates for t in Times for p in Products
+}
+
+########### Constraints
+# we can only supply from a warehouse if it is built
+mvprob.addConstraint(
+    x_mv[i,j,t,p] <= y_mv[j,t]
+    for i in Customers for j in Candidates for t in Times for p in Products
+)
+#if we build a warehouse it stays open 
+mvprob.addConstraint(
+    y_mv[j,t] <= y_mv[j,t+1]
+    for j in Candidates for t in Times if t != max(Times)
+)
+if nbCandidates >30:
+    mvprob.addConstraint(
+        xp.Sum(y_mv[j,t] for j in Candidates)
+        <=
+        nbCandidates//2
+        for t in Times 
+    )
+
+# We must meet all customer demands, each year
+mvprob.addConstraint(
+    xp.Sum(
+        x_mv[i,j,t,p]
+        for j in Candidates
+    )
+    == 1
+    for i in Customers for p in Products for t in Times
+)
+
+# the z decision variables are percentages of supplier k's total stock of p sent to warehouse j at time t 
+# constrain them less than one
+# and force them to zero if the supplier doesnt supply that product
+mvprob.addConstraint(
+    z_mv[k,j,t,p] <= int( p == Suppliers_df["Product group"][k] )
+    for k in Suppliers for j in Candidates for p in Products for t in Times
+)
+
+# we can supply out 100% of stock at most
+mvprob.addConstraint(
+    xp.Sum(
+        z_mv[k,j,t,p]
+        for j in Candidates
+    )
+    <= 1
+    for k in Suppliers for p in Products for t in Times
+)
+# we only supply to open warehouses
+mvprob.addConstraint(
+    z_mv[k,j,t,p] <= y_mv[j,t]
+    for t in Times for k in Suppliers for j in Candidates for p in Products
+)
+
+
+
+######link warehouse stock supplier
+# a warehouse can deliver no more than what it has in stock
+# assuming no stock gets carried over into the next year because fuck that its too complicated
+mvprob.addConstraint(
+    xp.Sum(
+        Suppliers_df["Capacity"][k] * z_mv[k,j,t,p]        #Into warehouse from suppliers
+        for k in Suppliers for p in Products
+        # if Suppliers_df["Product group"][k] == p
+    )
+    >=
+    xp.Sum(
+        avg_DemandPeriodsScenarios[i,p,t] * x_mv[i,j,t,p]              #Out of warehouse to customers
+        for i in Customers  for p in Products                    
+    )
+    for j in Candidates for t in Times
+)
+
+# a warehouse has a capacity
+mvprob.addConstraint(
+    xp.Sum(
+        Suppliers_df["Capacity"][k] * z_mv[k,j,t,p]        #Into warehouse from suppliers
+        for k in Suppliers for p in Products
+    )
+    <= Candidates_df["Capacity"][j]                     #Warehouse capacity
+    for j in Candidates for t in Times
+)
+
+
+################################
+# Objective function
+#minimise costs
+#################################
+#we know that if we build a warehouse it will be open in year 10
+# so we can use year 10 to calculate fixed costs
+avg_warehouse_setup_costs = xp.Sum(
+    Candidates_df["Setup cost"][j]*y_mv[j,final_t]
+    for j in Candidates
+)
+
+avg_warehouse_operating_costs = {
+    t: xp.Sum(
+        Operating_costs_df[j]*y_mv[j,t] 
+        for j in Candidates
+    )
+    for t in Times
+}
+
+avg_supplier_to_warehouse_costs = {
+    t: xp.Sum(
+        CostSupplierCandidate[k,j] * Suppliers_df["Capacity"][k] * z_mv[k,j,t,p]
+        for k in Suppliers for j in Candidates for p in Products
+    )
+    for t in Times
+}
+
+avg_warehouse_to_customer_costs = {
+    t: xp.Sum(
+        CostCandidateCustomers[j,i] * avg_DemandPeriodsScenarios[i,p,t] * x_mv[i,j,t,p]
+        for i in Customers for j in Candidates for p in Products
+    )
+    for t in Times
+}
+
+##################################
+#Solving
+##################################
+
+prob.setControl('miprelstop', .05) # stop once the mip gap is below 5%
+prob.controls.maxtime = -10*60 # stops after 3 mins
+mvprob.setObjective(
+    avg_warehouse_setup_costs + xp.Sum(
+    avg_warehouse_operating_costs[t] + avg_supplier_to_warehouse_costs[t] + avg_warehouse_to_customer_costs[t]
+    for t in Times
+    )
+    ,sense = xp.minimize
+)
+
+
+mvprob.solve()
+
+
+y_keys = list(y_mv.keys())
+y_values = mvprob.getSolution(list(y_mv.values()))
+
+
+y_solution = dict(zip(y_keys, y_values))
+
+    
+for (j,t), val in y_solution.items():
+    prob.chgbounds([y[j,t]], ['L'], [val])
+    prob.chgbounds([y[j,t]], ['U'], [val])
+    
+prob.solve()
+
+sp_solution = sp_prob.getSolution()
+mv_objective_value = sp_prob.getObjVal()

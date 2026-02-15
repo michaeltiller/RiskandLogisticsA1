@@ -122,6 +122,15 @@ def calcClustersv2(Demand_df: pd.DataFrame, Candidates_df:pd.DataFrame, DemandPe
         (scenarios >= 1) & (scenarios <= 10)
         ]
     
+    avg_DemandPeriodsScenarios_df = DemandPeriodsScenarios_df.reset_index().groupby(['cluster label', 'Product', 'Period'])['Demand'].mean()
+    
+    avg_DemandPeriodsScenarios_df = avg_DemandPeriodsScenarios_df.rename(
+        level=0,
+        index = lambda cluster_label:reduced_Candidates_df.index.array[cluster_label] ) 
+    avg_DemandPeriodsScenarios_df = avg_DemandPeriodsScenarios_df.drop(columns="Customer")
+    
+    
+    
     
     DemandPeriodsScenarios_df = DemandPeriodsScenarios_df.rename(
         level=0,
@@ -131,4 +140,8 @@ def calcClustersv2(Demand_df: pd.DataFrame, Candidates_df:pd.DataFrame, DemandPe
     
     DemandPeriodsScenarios = DemandPeriodsScenarios_df.to_dict()["Demand"]
     
-    return All_Candidates_df, reduced_Candidates_df, reduced_demand_df, DemandPeriods, DemandPeriodsScenarios
+    avg_DemandPeriodsScenarios = avg_DemandPeriodsScenarios_df.to_dict()
+    
+    
+    
+    return All_Candidates_df, reduced_Candidates_df, reduced_demand_df, DemandPeriods, DemandPeriodsScenarios, avg_DemandPeriodsScenarios
