@@ -84,12 +84,12 @@ CostCandidateCustomers = {
 # Candidates = rng.choice(Candidates_df.index, size =40, replace=False)
 
 #cluster the customer locations and take the aggregated demand
-all_Customers_df, reduced_Customers_df, _, DemandPeriods  = calcClusters(Demand_df, Candidates_df, num_clusters=60)
+all_Customers_df, reduced_Customers_df, _, DemandPeriods  = calcClusters(Demand_df, Candidates_df, num_clusters=30)
 Customers = reduced_Customers_df.index
 
 ########## this is where it gets  confusing
 #cluster the warehouse locations 
-num_warehouses = 60
+num_warehouses = 30
 
 # sub_start = perf_counter() 
 # print(f"solving subproblem of finding {num_warehouses} warehouses which have minimal transport cost")
@@ -175,7 +175,6 @@ prob.addConstraint(
 
 # the z decision variables are percentages of supplier k's total stock of p sent to warehouse j at time t 
 # constrain them less than one
-# and force them to zero if the supplier doesnt supply that product
 prob.addConstraint(
     z[k,j,t,p] <= int( p == Suppliers_df["Product group"][k] )
     for k in Suppliers for j in Candidates for p in Products for t in Times
@@ -190,11 +189,11 @@ prob.addConstraint(
     <= 1
     for k in Suppliers for p in Products for t in Times
 )
-# we only supply to open warehouses
-prob.addConstraint(
-    z[k,j,t,p] <= y[j,t]
-    for t in Times for k in Suppliers for j in Candidates for p in Products
-)
+# # we only supply to open warehouses
+# prob.addConstraint(
+#     z[k,j,t,p] <= y[j,t]
+#     for t in Times for k in Suppliers for j in Candidates for p in Products
+# )
 
 
 
@@ -205,7 +204,6 @@ prob.addConstraint(
     xp.Sum(
         Suppliers_df["Capacity"][k] * z[k,j,t,p]        #Into warehouse from suppliers
         for k in Suppliers for p in Products
-        # if Suppliers_df["Product group"][k] == p
     )
     >=
     xp.Sum(

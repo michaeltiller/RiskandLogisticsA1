@@ -136,7 +136,7 @@ y = {
 }
 
 z = {
-    (k,j,t,p, s): prob.addVariable(name=f"Z__S{k}_W{j}_T{t}_P{p}_S{s}")
+    (k,j,t,p, s): prob.addVariable(name=f"Z__S{k}_W{j}_T{t}_P{p}_S{s}", ub=1) #idk if this helps the solver
     for k in Suppliers for j in Candidates for t in Times for p in Products for s in Scenarios
 }
 
@@ -179,11 +179,11 @@ prob.addConstraint(
     <= 1
     for k in Suppliers for p in Products for t in Times for s in Scenarios
 )
-# we only supply to open warehouses
-# prob.addConstraint(
-#     z[k,j,t,p,s] <= y[j,t]
-#     for t in Times for k in Suppliers for j in Candidates for p in Products for s in Scenarios
-# )
+# we only supply to open warehouses - this helps to do 30,30 10scen in 10 mins
+prob.addConstraint(
+    z[k,j,t,p,s] <= y[j,t]
+    for t in Times for k in Suppliers for j in Candidates for p in Products for s in Scenarios
+)
 
 ######link warehouse stock supplier
 # a warehouse can deliver no more than what it has in stock
@@ -303,8 +303,8 @@ for t in Times:
 
 
 probs=prob
-ys = y
-zs = z
+ys = prob.getSolution(y)
+zs = prob.getSolution(z)
 cand_gdf=Candidates_df.loc[Candidates]
 cust_gdf=PostcodeDistricts_df.loc[Customers] 
 supp_gdf=Suppliers_df
