@@ -35,8 +35,6 @@ Customers = reduced_Customers_df.index
 
 Suppliers = Suppliers_df.index
 
-
-
 Times = range(1, nbPeriods + 1)
 nbScenarios = 5
 nbCustomers = len(Customers)
@@ -151,6 +149,8 @@ prob.addConstraint(
     y[j,t] <= y[j,t+1]
     for j in Candidates for t in Times if t != max(Times)
 )
+
+
 
 
 # We must meet all customer demands, each year
@@ -284,7 +284,7 @@ costs = map(
 
 
 setup, operating, sup_ware, ware_cust = costs
-print(f"t\tware\t{"operating":>10} {"supp->ware":>10} {"ware->cust":>10}")
+#print(f"t\tware\t{"operating":>10} {"supp->ware":>10} {"ware->cust":>10}")
 print("t\twarehouses operating, sup_ware, ware_cust")
 
 for t in Times:
@@ -305,11 +305,15 @@ for t in Times:
 probs=prob
 ys = prob.getSolution(y)
 zs = prob.getSolution(z)
+ys = prob.getSolution(y)
+zs = prob.getSolution(z)
 cand_gdf=Candidates_df.loc[Candidates]
 cust_gdf=PostcodeDistricts_df.loc[Customers] 
 supp_gdf=Suppliers_df
 time_index=Times 
 product_index=Products
+
+Scenarios
 
 
 t = max(time_index)
