@@ -25,11 +25,11 @@ from time import perf_counter
 
 ########## this is where it gets  confusing
 #cluster the warehouse locations 
-_, reduced_Candidates_df, _, _, _  = calcClustersv2(Demand_df, Candidates_df,DemandPeriodsScenarios_df, num_clusters=30)
+_, reduced_Candidates_df, _, _, _,_  = calcClusters(Demand_df, Candidates_df,DemandPeriodsScenarios_df, num_clusters=30)
 Candidates = reduced_Candidates_df.index
 
 #cluster the customer locations and take the aggregated demand
-_, reduced_Customers_df, _, _, DemandPeriodsScenarios  = calcClustersv2(Demand_df, Candidates_df,DemandPeriodsScenarios_df, num_clusters=30)
+_, reduced_Customers_df, _, _, DemandPeriodsScenarios, avg_DemandPeriodsScenarios  = calcClusters(Demand_df, Candidates_df,DemandPeriodsScenarios_df, num_clusters=30)
 Customers = reduced_Customers_df.index
 
 
@@ -270,10 +270,15 @@ print(f"took {pretty_print_seconds(end_time-start_time)} for a problem with {pro
 # =============================================================================
 # Post-processing and data visualisation
 # =============================================================================
+
+obj_2sp = prob.attributes.objval
+
+
+
 print_sol_status(prob)
 
 #x = { k:int(v) for k,v in prob.getSolution(x).items() }   # if x is not binary change this !!!
-y = { k:int(v) for k,v in prob.getSolution(y).items() }
+ytemp = { k:int(v) for k,v in prob.getSolution(y).items() }
 #z = prob.getSolution(z)
 costs = (warehouse_setup_costs, warehouse_operating_costs, supplier_to_warehouse_costs, warehouse_to_customer_costs)
 costs = map(
@@ -285,7 +290,7 @@ costs = map(
 
 setup, operating, sup_ware, ware_cust = costs
 #print(f"t\tware\t{"operating":>10} {"supp->ware":>10} {"ware->cust":>10}")
-print("t\twarehouses operating, sup_ware, ware_cust")
+print("t\t, warehouses operating, sup_ware, ware_cust")
 
 for t in Times:
 
@@ -296,8 +301,8 @@ for t in Times:
     # the .0f means no decimals
     print(f"{t}\t{n_ware_t:>3}\t{operating[t]:>10,.0f} {sup_ware[t]:>10,.0f} {ware_cust[t]:>10,.0f}")
     
-    #print(f"setup costs were {setup:,.0f}")
-
+print(f"setup costs were {setup:,.0f}")
+print(f"Total Costs were {obj_2sp}")
 
 
 
@@ -313,68 +318,98 @@ supp_gdf=Suppliers_df
 time_index=Times 
 product_index=Products
 
-Scenarios
+
 
 
 t = max(time_index)
-s=nbScenarios
-m = folium.Map(location=[cand_gdf['lat'].mean(), cand_gdf['lon'].mean()], zoom_start=7)
 
-cand_jitter = np.array([0,-.1]) # need to move warehouses as they overlap with customers
+# Create a clean map
+m = folium.Map(
+    location=[cand_gdf['lat'].mean(), cand_gdf['lon'].mean()],
+    zoom_start=6.5,
+    tiles='CartoDB positron'
+)
 
+# Small jitter to avoid overlap
+jitter_amount = 0.02
 
-#show the suppliers
+# --- Show suppliers ---
 for k in supp_gdf.index:
-
     supp = supp_gdf.loc[k]
-    supp_loc = supp["lat"], supp["lon"]
-    folium.Marker(
-        location= supp_loc,
-        icon=folium.Icon(
-            icon="industry",
-            prefix="fa",
-            color= "green" if max(zs[k,j,t,p,s] for p in product_index for j in cand_gdf.index) else "white",
-            icon_color="black"
-        )
+    supp_loc = (supp["lat"], supp["lon"])
+    color = "green" if max(
+        zs[k,j,t,p,s] 
+        for p in product_index 
+        for j in cand_gdf.index 
+        for s in Scenarios
+    ) else "white"
+
+    folium.CircleMarker(
+        location=supp_loc,
+        radius=5,
+        color=color,
+        fill=True,
+        fill_color=color,
+        fill_opacity=0.7,
+        popup=f"Supplier {k}"
     ).add_to(m)
-    
 
-
-#show the warehouses 
+# --- Show warehouses ---
 for j in cand_gdf.index:
-
     ware = cand_gdf.loc[j]
+    ware_loc_jittered = (
+        ware["lat"] + np.random.uniform(-jitter_amount, jitter_amount),
+        ware["lon"] + np.random.uniform(-jitter_amount, jitter_amount)
+    )
+    color = "red" if ys[j,t] else "white"
 
-    folium.Marker(
-        location= ( ware["lat"]+cand_jitter[0], ware["lon"]+cand_jitter[1] ),
-        icon=folium.Icon(
-            icon="warehouse",
-            prefix="fa",
-            color= "red" if ys[j,t] else "white", 
-            icon_color="grey"
-        )
+    folium.CircleMarker(
+        location=ware_loc_jittered,
+        radius=6,
+        color=color,
+        fill=True,
+        fill_color=color,
+        fill_opacity=0.8,
+        popup=f"Warehouse {j}"
     ).add_to(m)
 
-
-#show the customers
+# --- Show customers ---
 for i in cust_gdf.index:
     cust = cust_gdf.loc[i]
-    cust_loc = cust_gdf.loc[i,["lat","lon"]].values 
-    folium.Marker(
-        location= cust_loc,
-        icon=folium.Icon(
-            icon="house",
-            prefix="fa",
-            color= "blue",
-            icon_color="grey"
-        )
-    ).add_to(m)   
+    cust_loc_jittered = (
+        cust["lat"] + np.random.uniform(-jitter_amount, jitter_amount),
+        cust["lon"] + np.random.uniform(-jitter_amount, jitter_amount)
+    )
 
-    #show warehouse to customer links
- 
+    folium.CircleMarker(
+        location=cust_loc_jittered,
+        radius=4,
+        color="blue",
+        fill=True,
+        fill_color="blue",
+        fill_opacity=0.6,
+        popup=f"Customer {i}"
+    ).add_to(m)
 
+# --- Add a legend ---
+legend_html = """
+     <div style="
+     position: fixed; 
+     bottom: 50px; left: 50px; width: 160px; height: 120px; 
+     border:2px solid grey; z-index:9999; font-size:14px;
+     background-color:white;
+     opacity: 0.9;
+     padding: 10px;
+     ">
+     <b>Legend</b><br>
+     <i class="fa fa-circle" style="color:green"></i>&nbsp; Supplier<br>
+     <i class="fa fa-circle" style="color:white"></i>&nbsp; Unused Supplier
+
+     <i class="fa fa-circle" style="color:red"></i>&nbsp; Warehouse<br>
+     <i class="fa fa-circle" style="color:blue"></i>&nbsp; Customer
+     </div>
+     """
+m.get_root().html.add_child(folium.Element(legend_html))
+
+# Show map in browser
 m.show_in_browser()
-
-
-
-
