@@ -141,7 +141,7 @@ y = {
 }
 
 z = {
-    (k,j,t,p, s): prob.addVariable(name=f"Z__S{k}_W{j}_T{t}_P{p}_S{s}")
+     (k,j,t,p, s): prob.addVariable(name=f"Z__S{k}_W{j}_T{t}_P{p}_S{s}", ub=1) #idk if this helps the solver
     for k in Suppliers for j in Candidates for t in Times for p in Products for s in Scenarios
 }
 
@@ -156,6 +156,8 @@ prob.addConstraint(
     y[j,t] <= y[j,t+1]
     for j in Candidates for t in Times if t != max(Times)
 )
+
+
 
 
 # We must meet all customer demands, each year
@@ -175,6 +177,7 @@ prob.addConstraint(
 #     )
 #     for t in Times
 # )
+
 prob.addConstraint(
     xp.Sum(
         x[i,j,t,p, s]
@@ -200,6 +203,14 @@ prob.addConstraint(
     <= 1
     for k in Suppliers for p in Products for t in Times for s in Scenarios
 )
+
+
+# we only supply to open warehouses - this helps to do 30,30 10scen in 10 mins, add to constraints
+prob.addConstraint(
+    z[k,j,t,p,s] <= y[j,t]
+    for t in Times for k in Suppliers for j in Candidates for p in Products for s in Scenarios
+)
+
 
 # constrain that suppliers only supply their product type
 prob.addConstraint(
@@ -323,8 +334,8 @@ for t in Times:
 
 
 probs=prob
-ys = y
-zs = z
+ys = prob.getSolution(y)
+zs = prob.getSolution(z)
 cand_gdf=Candidates_df.loc[Candidates]
 cust_gdf=PostcodeDistricts_df.loc[Customers] 
 supp_gdf=Suppliers_df
