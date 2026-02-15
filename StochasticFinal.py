@@ -43,8 +43,6 @@ Suppliers = Suppliers_df.index
 
 
 
-
-
 nbCustomers = len(Customers)
 nbSuppliers = len(Suppliers)
 nbCandidates = len(Candidates)
@@ -221,7 +219,7 @@ prob.addConstraint(
         # if Suppliers_df["Product group"][k] == p
     )
     >=
-    0.5 * (xp.Sum(
+    0.8 * (xp.Sum(
         DemandPeriodsScenarios[i,p,t,s] * x[i,j,t,p, s]             #Out of warehouse to customers
         for i in Customers  for p in Products               
     ) )
