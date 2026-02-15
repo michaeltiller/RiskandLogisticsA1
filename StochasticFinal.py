@@ -315,7 +315,7 @@ costs = map(
 
 
 setup, operating, sup_ware, ware_cust = costs
-print(f"t\tware\t{"operating":>10} {"supp->ware":>10} {"ware->cust":>10}")
+#print(f"t\tware\t{"operating":>10} {"supp->ware":>10} {"ware->cust":>10}")
 print("t\twarehouses operating, sup_ware, ware_cust")
 
 for t in Times:
@@ -342,6 +342,8 @@ supp_gdf=Suppliers_df
 time_index=Times 
 product_index=Products
 
+Scenarios
+
 
 t = max(time_index)
 m = folium.Map(location=[cand_gdf['lat'].mean(), cand_gdf['lon'].mean()], zoom_start=7)
@@ -359,7 +361,7 @@ for k in supp_gdf.index:
         icon=folium.Icon(
             icon="industry",
             prefix="fa",
-            color= "green" if max(zs[k,j,t,p] for p in product_index for j in cand_gdf.index) else "white",
+            color= "green" if max(zs[k,j,t,p,s] for p in product_index for j in cand_gdf.index for s in Scenarios) else "white",
             icon_color="black"
         )
     ).add_to(m)
