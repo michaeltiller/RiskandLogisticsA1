@@ -20,34 +20,34 @@ def pretty_print_seconds(secs):
                    if val !=0
                    )
 
-def get_basic_summary_sol(probs, xs,ys,zs, time_index, product_index, costs):
+# def get_basic_summary_sol(probs, xs,ys,zs, time_index, product_index, costs):
 
-    setup, operating, sup_ware, ware_cust = costs
-    print(f"t\tware\t{"operating":>10} {"supp->ware":>10} {"ware->cust":>10}")
-    # print("t\twarehouses operating, sup_ware, ware_cust")
+#     setup, operating, sup_ware, ware_cust = costs
+#     print(f"t\tware\t{"operating":>10} {"supp->ware":>10} {"ware->cust":>10}")
+#     # print("t\twarehouses operating, sup_ware, waßre_cust")
 
-    for t in time_index:
+#     for t in time_index:
 
-        n_ware_t = sum( v for k, v in ys.items() if k[1]==t )
+#         n_ware_t = sum( v for k, v in ys.items() if k[1]==t )
 
-        # the >10 means put it to the right within 10 spaces 
-        # the , means use comma seperation
-        # the .0f means no decimals
-        print(f"{t}\t{n_ware_t:>3}\t{operating[t]:>10,.0f} {sup_ware[t]:>10,.0f} {ware_cust[t]:>10,.0f}")
+#         # the >10 means put it to the right within 10 spaces 
+#         # the , means use comma seperation
+#         # the .0f means no decimals
+#         print(f"{t}\t{n_ware_t:>3}\t{operating[t]:>10,.0f} {sup_ware[t]:>10,.0f} {ware_cust[t]:>10,.0f}")
     
-    print(f"setup costs were {setup:,.0f}")
+#     print(f"setup costs were {setup:,.0f}")
 
-    operating = sum(operating[t] for t in time_index)
-    sup_ware = sum(sup_ware[t] for t in time_index)
-    ware_cust = sum(ware_cust[t] for t in time_index)
+#     operating = sum(operating[t] for t in time_index)
+#     sup_ware = sum(sup_ware[t] for t in time_index)
+#     ware_cust = sum(ware_cust[t] for t in time_index)
 
-    total_cost = setup + operating +ware_cust+ sup_ware
+#     total_cost = setup + operating +ware_cust+ sup_ware
     
-    print(f"{total_cost=:,.0f} is broken into")
-    print(f"{"operating":<20}:{operating/total_cost:>10,.0%}")
-    print(f"{"setup":<20}:{setup/total_cost:>10,.0%}")
-    print(f"{"supplier->warehouse":<20}:{sup_ware/total_cost:>10,.0%}")
-    print(f"{"warehouse->customer":<20}:{ware_cust/total_cost:>10,.0%}")
+#     print(f"{total_cost=:,.0f} is broken into")
+#     print(f"{"operating":<20}:{operating/total_cost:>10,.0%}")
+#     print(f"{"setup":<20}:{setup/total_cost:>10,.0%}")
+#     print(f"{"supplier->warehouse":<20}:{sup_ware/total_cost:>10,.0%}")
+#     print(f"{"warehouse->customer":<20}:{ware_cust/total_cost:>10,.0%}")
 
 
 def put_solution_on_map(probs, xs, ys, zs, cand_gdf:gpd.GeoDataFrame, cust_gdf, supp_gdf,

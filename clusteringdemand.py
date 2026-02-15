@@ -24,9 +24,9 @@ import platform
 
 # map demand to the candidate location 
 
-def calcClusters(Demand_df: pd.DataFrame, Candidates_df:pd.DataFrame, num_clusters:int):
+def calcClusters(Demand_df: pd.DataFrame, Candidates_df:pd.DataFrame, DemandPeriodsScenarios_df:pd.DataFrame, num_clusters:int):
 
-
+    data_dir="CaseStudyDataPY"
     demand_grouped = Demand_df.groupby('Customer')["Demand"].sum()
     
     Candidates_df = pd.merge(Candidates_df, demand_grouped, left_on = 'Candidate ID', right_on = demand_grouped.index, how ='left')
@@ -109,13 +109,49 @@ def calcClusters(Demand_df: pd.DataFrame, Candidates_df:pd.DataFrame, num_cluste
         index = lambda cluster_label:reduced_Candidates_df.index.array[cluster_label] ) 
     
     DemandPeriods_df = DemandPeriods_df.drop(columns="Customer")
+    
+    DemandPeriods_df.index.get_level_values('cluster label').unique()
 
+    
     #make a dictionary out of it
     DemandPeriods = DemandPeriods_df.to_dict()["Demand"]
-
-    All_Candidates_df = All_Candidates_df.set_index("Candidate ID") # i think this got unset somehow
     
-    return All_Candidates_df, reduced_Candidates_df, reduced_demand_df, DemandPeriods
+    
+    DemandPeriodsScenarios_df = pd.read_csv(f"{data_dir}/DemandPeriodScenarios.csv")
+    DemandPeriodsScenarios_df["cluster label"] = DemandPeriodsScenarios_df["Customer"].apply(lambda x: map_cand_id_to_cluster_label[x])
+    DemandPeriodsScenarios_df = DemandPeriodsScenarios_df.astype(int)
+    DemandPeriodsScenarios_df = DemandPeriodsScenarios_df.groupby(["cluster label", "Product", "Period", "Scenario"]).sum()
+    
+    scenarios = DemandPeriodsScenarios_df.index.get_level_values("Scenario")
+
+    DemandPeriodsScenarios_df = DemandPeriodsScenarios_df[
+        (scenarios >= 1) & (scenarios <= 10)
+        ]
+    
+    avg_DemandPeriodsScenarios_df = DemandPeriodsScenarios_df.reset_index().groupby(['cluster label', 'Product', 'Period'])['Demand'].mean()
+    
+    avg_DemandPeriodsScenarios_df = avg_DemandPeriodsScenarios_df.rename(
+        level=0,
+        index = lambda cluster_label:reduced_Candidates_df.index.array[cluster_label] ) 
+    avg_DemandPeriodsScenarios_df = avg_DemandPeriodsScenarios_df.drop(columns="Customer")
+    
+    
+    
+    
+    DemandPeriodsScenarios_df = DemandPeriodsScenarios_df.rename(
+        level=0,
+        index = lambda cluster_label:reduced_Candidates_df.index.array[cluster_label] ) 
+    DemandPeriodsScenarios_df = DemandPeriodsScenarios_df.drop(columns="Customer")
+    
+    
+    DemandPeriodsScenarios = DemandPeriodsScenarios_df.to_dict()["Demand"]
+    
+    avg_DemandPeriodsScenarios = avg_DemandPeriodsScenarios_df.to_dict()
+    
+    All_Candidates_df = All_Candidates_df.set_index("Candidate ID") # i think this got unset somehow
+
+    
+    return All_Candidates_df, reduced_Candidates_df, reduced_demand_df, DemandPeriods, DemandPeriodsScenarios, avg_DemandPeriodsScenarios
     
     
     # creates candidates, then also need seperate df which has demand per product type for each candidate # so are we still using 400 customers and just 60 candidate locations to build?
@@ -266,7 +302,7 @@ if __name__ == "__main__":
     ) = get_all_data("CaseStudyDataPY")
 
     #cluster the customer locations and take the aggregated demand
-    _, reduced_Customers_df, _, _  = calcClusters(Demand_df, Candidates_df, num_clusters=200)
+    _, reduced_Customers_df, _, _ , _, _ = calcClusters(Demand_df, Candidates_df,DemandPeriodsScenarios_df, num_clusters=200)
 
     reduced_Customers = reduced_Customers_df.index
     all_Candidates = Candidates_df.index 
