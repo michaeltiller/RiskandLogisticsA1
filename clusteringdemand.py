@@ -210,7 +210,7 @@ def aggregate_warehouses_subproblem(num_warehouses:int, candidates_index, custom
 
     subprob.solve()
 
-    print_sol_status(subprob)
+    # print_sol_status(subprob)
 
     sol_status = subprob.attributes.solstatus
     if sol_status not in ( xp.SolStatus.OPTIMAL, xp.SolStatus.FEASIBLE):
