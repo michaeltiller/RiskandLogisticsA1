@@ -6,7 +6,7 @@ from helper_funcs import *
 from clusteringdemand import *
 from time import perf_counter
 
-def part_a_MIP(max_solve_time, mip_bound, num_warehouses, num_customers):
+def part_a_MIP(max_solve_time, mip_bound, num_warehouses, num_customers, use_kmeans):
     (
         PostcodeDistricts_df, Candidates_df, Suppliers_df,
         Demand_df, DemandPeriods, DemandPeriodsScenarios_df,
@@ -91,16 +91,18 @@ def part_a_MIP(max_solve_time, mip_bound, num_warehouses, num_customers):
     ########## this is where it gets  confusing
     #cluster the warehouse locations 
     # num_warehouses = 30
+    if use_kmeans:
+        _, reduced_Candidates_df, _, _  = calcClusters(Demand_df, Candidates_df, num_clusters=num_warehouses)
+        Candidates = reduced_Candidates_df.index
+    else:
+        # sub_start = perf_counter() 
+        print(f"solving subproblem of finding {num_warehouses} warehouses which have minimal transport cost")
+        reduced_warehouses_index = aggregate_warehouses_subproblem(num_warehouses, Candidates_df.index, Customers, CostCandidateCustomers )
+        # sub_end = perf_counter()
+        # print(f"subproblem took {pretty_print_seconds(sub_end-sub_start)}")
+        Candidates = reduced_warehouses_index
 
-    # sub_start = perf_counter() 
-    print(f"solving subproblem of finding {num_warehouses} warehouses which have minimal transport cost")
-    reduced_warehouses_index = aggregate_warehouses_subproblem(num_warehouses, Candidates_df.index, Customers, CostCandidateCustomers )
-    # sub_end = perf_counter()
-    # print(f"subproblem took {pretty_print_seconds(sub_end-sub_start)}")
-    Candidates = reduced_warehouses_index
 
-    # _, reduced_Candidates_df, _, _  = calcClusters(Demand_df, Candidates_df, num_clusters=num_warehouses)
-    # Candidates = reduced_Candidates_df.index
 
 
     Suppliers = Suppliers_df.index
@@ -156,13 +158,13 @@ def part_a_MIP(max_solve_time, mip_bound, num_warehouses, num_customers):
         y[j,t] <= y[j,t+1]
         for j in Candidates for t in Times if t != max(Times)
     )
-    if nbCandidates >30:
-        prob.addConstraint(
-            xp.Sum( y[j,t] for j in Candidates)
-            <=
-            nbCandidates//2
-            for t in Times 
-        )
+    # if nbCandidates >30:
+    #     prob.addConstraint(
+    #         xp.Sum( y[j,t] for j in Candidates)
+    #         <=
+    #         nbCandidates//2
+    #         for t in Times 
+    #     )
 
     # We must meet all customer demands, each year
     prob.addConstraint(
@@ -287,21 +289,28 @@ def part_a_MIP(max_solve_time, mip_bound, num_warehouses, num_customers):
 # =============================================================================
 # Post-processing and data visualisation
 # =============================================================================
-max_solve_time = 20
+max_solve_time = 30
 mip_bound = .05
-for num_warehouses, num_customers in [
-    (20,100),
-    (40,100),
-    (60,100),
-    (80,100),
-    (100,100)
+for num_warehouses, num_customers, use_kmeans in [
+    (20,100, True),
+    (20,100, False),
+    (40,100, True),
+    (40,100, False),
+    (60,100, True),
+    (60,100, False),
+    (80,100, True),
+    (80,100, False),
+    (100,100, True),
+    (100,100, False)
 ]:
     sol_time = max_solve_time
     objval = 0
     fuckup = False
+    agg_type = "Kmeans" if use_kmeans else "subprob"
+
     try:
         start_time = perf_counter()
-        solved_prob = part_a_MIP(max_solve_time, mip_bound, num_warehouses, num_customers)
+        solved_prob = part_a_MIP(max_solve_time, mip_bound, num_warehouses, num_customers, use_kmeans)
         end_time = perf_counter()
         sol_time = end_time-start_time
 
@@ -311,15 +320,17 @@ for num_warehouses, num_customers in [
         if sol_status  in ( xp.SolStatus.OPTIMAL, xp.SolStatus.FEASIBLE):
             objval = solved_prob.attributes.objval
         else:
+            print("No feasible solution found")
             objval = 0
         
     except Exception as e :
         print(e)
         fuckup = True
     
-    print(f"{sol_time:,.0f}, {objval:.0f}, {fuckup} W{num_warehouses} C{num_customers}")
+    print(f"{sol_time:,.0f}, {objval:.0f}, {fuckup} W{num_warehouses} C{num_customers} Agg{agg_type}")
     print()
 
+    
     with open("part a comparison Subprob.txt", "a") as f:
-        txt = ",".join(str(i) for i in (sol_time, objval, fuckup, num_warehouses, num_customers) ) + "\n"
+        txt = ",".join(str(i) for i in (int(sol_time), int(objval), fuckup, num_warehouses, num_customers, agg_type) ) + "\n"
         f.write(txt)
