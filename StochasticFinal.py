@@ -194,7 +194,7 @@ prob.addConstraint(
         for k in Suppliers for p in Products
     )
     ==
-    1*(xp.Sum(
+    .8*(xp.Sum(
         DemandPeriodsScenarios[i,p,t,s] * x[i,j,t,p, s]             #Out of warehouse to customers
         for i in Customers  for p in Products               
     ) )
@@ -289,19 +289,19 @@ costs = map(
 
 setup, operating, sup_ware, ware_cust = costs
 #print(f"t\tware\t{"operating":>10} {"supp->ware":>10} {"ware->cust":>10}")
-print("t\t, warehouses operating, sup_ware, ware_cust")
+# print("t\t, warehouses operating, sup_ware, ware_cust")
 
-for t in Times:
+# for t in Times:
 
-    n_ware_t = sum( v for k, v in y.items() if k[1]==t )
+#     n_ware_t = sum( v for k, v in y.items() if k[1]==t )
 
-    # the >10 means put it to the right within 10 spaces 
-    # the , means use comma seperation
-    # the .0f means no decimals
-    print(f"{t}\t{n_ware_t:>3}\t{operating[t]:>10,.0f} {sup_ware[t]:>10,.0f} {ware_cust[t]:>10,.0f}")
+#     # the >10 means put it to the right within 10 spaces 
+#     # the , means use comma seperation
+#     # the .0f means no decimals
+#     print(f"{t}\t{n_ware_t:>3}\t{operating[t]:>10,.0f} {sup_ware[t]:>10,.0f} {ware_cust[t]:>10,.0f}")
     
-print(f"setup costs were {setup:,.0f}")
-print(f"Total Costs were {obj_2sp}")
+# print(f"setup costs were {setup:,.0f}")
+# print(f"Total Costs were {obj_2sp}")
 
 
 
@@ -317,7 +317,7 @@ supp_gdf=Suppliers_df
 time_index=Times 
 product_index=Products
 
-filtered = {k: v for k, v in y.items() if v == 1}
+filtered = {k: v for k, v in ys.items() if v == 1}
 
 earliest_open = {}
 
@@ -360,7 +360,7 @@ for k in supp_gdf.index:
         for p in product_index 
         for j in cand_gdf.index 
         for s in Scenarios
-    ) else "white"
+    ) else "grey"
 
     folium.CircleMarker(
         location=supp_loc,
@@ -421,7 +421,7 @@ legend_html = """
      ">
      <b>Legend</b><br>
      <i class="fa fa-circle" style="color:green"></i>&nbsp; Supplier<br>
-     <i class="fa fa-circle" style="color:white"></i>&nbsp; Unused Supplier
+     <i class="fa fa-circle" style="color:grey"></i>&nbsp; Unused Supplier
 
      <i class="fa fa-circle" style="color:red"></i>&nbsp; Warehouse<br>
      <i class="fa fa-circle" style="color:blue"></i>&nbsp; Customer
