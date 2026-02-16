@@ -85,14 +85,14 @@ def part_a_MIP(max_solve_time, mip_bound, num_warehouses, num_customers, use_kme
     # Candidates = rng.choice(Candidates_df.index, size =40, replace=False)
 
     #cluster the customer locations and take the aggregated demand
-    all_Customers_df, reduced_Customers_df, _, DemandPeriods  = calcClusters(Demand_df, Candidates_df, num_clusters=num_customers)
+    all_Customers_df, reduced_Customers_df, _, DemandPeriods, _, _  = calcClusters(Demand_df, Candidates_df, num_clusters=num_customers, DemandPeriodsScenarios_df=DemandPeriodsScenarios_df)
     Customers = reduced_Customers_df.index
 
     ########## this is where it gets  confusing
     #cluster the warehouse locations 
     # num_warehouses = 30
     if use_kmeans:
-        _, reduced_Candidates_df, _, _  = calcClusters(Demand_df, Candidates_df, num_clusters=num_warehouses)
+        _, reduced_Candidates_df, _, _, _, _  = calcClusters(Demand_df, Candidates_df, num_clusters=num_warehouses, DemandPeriodsScenarios_df=DemandPeriodsScenarios_df)
         Candidates = reduced_Candidates_df.index
     else:
         # sub_start = perf_counter() 
@@ -256,7 +256,7 @@ def part_a_MIP(max_solve_time, mip_bound, num_warehouses, num_customers, use_kme
 
     warehouse_to_customer_costs = {
         t: xp.Sum(
-            agg_ware_cust_travel_costs[j,i] * DemandPeriods[i,p,t] * x[i,j,t,p]
+            CostCandidateCustomers[j,i] * DemandPeriods[i,p,t] * x[i,j,t,p]
             for i in Customers for j in Candidates for p in Products
         )
         for t in Times
@@ -289,19 +289,17 @@ def part_a_MIP(max_solve_time, mip_bound, num_warehouses, num_customers, use_kme
 # =============================================================================
 # Post-processing and data visualisation
 # =============================================================================
-max_solve_time = 30
-mip_bound = .05
+max_solve_time = 15
+mip_bound = .1
 for num_warehouses, num_customers, use_kmeans in [
-    (20,100, True),
-    (20,100, False),
-    (40,100, True),
-    (40,100, False),
-    (60,100, True),
-    (60,100, False),
-    (80,100, True),
-    (80,100, False),
-    (100,100, True),
-    (100,100, False)
+    (20,80, True),
+    (20,80, False),
+    (40,80, True),
+    (40,80, False),
+    (60,80, True),
+    (60,80, False),
+    (80,80, True),
+    (80,80, False),
 ]:
     sol_time = max_solve_time
     objval = 0

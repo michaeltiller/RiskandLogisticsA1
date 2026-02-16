@@ -84,7 +84,7 @@ CostCandidateCustomers = {
 # Candidates = rng.choice(Candidates_df.index, size =40, replace=False)
 
 #cluster the customer locations and take the aggregated demand
-all_Customers_df, reduced_Customers_df, _, DemandPeriods  = calcClusters(Demand_df, Candidates_df, num_clusters=30)
+all_Customers_df, reduced_Customers_df, _, DemandPeriods, _, _  = calcClusters(Demand_df, Candidates_df,DemandPeriodsScenarios_df, num_clusters=30)
 Customers = reduced_Customers_df.index
 
 ########## this is where it gets  confusing
@@ -98,7 +98,7 @@ num_warehouses = 30
 # print(f"subproblem took {pretty_print_seconds(sub_end-sub_start)}")
 # Candidates = reduced_warehouses_index
 
-_, reduced_Candidates_df, _, _  = calcClusters(Demand_df, Candidates_df, num_clusters=num_warehouses)
+_, reduced_Candidates_df, _, _, _, _  = calcClusters(Demand_df, Candidates_df, DemandPeriodsScenarios_df, num_clusters=num_warehouses)
 Candidates = reduced_Candidates_df.index
 
 
