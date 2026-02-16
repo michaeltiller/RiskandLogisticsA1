@@ -6,3 +6,4 @@ time,objval,error,warehouses,customers,method
 261,38955947,False,60,80,Kmeans
 960,41171225,False,60,80,subprob
 971,41852753,False,80,80,Kmeans
+944,41852753,False,80,80,subprob
