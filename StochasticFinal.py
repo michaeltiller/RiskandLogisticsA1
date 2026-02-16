@@ -4,7 +4,6 @@ import xpress as xp
 import platform
 from helper_funcs import *
 from clusteringdemand import calcClusters
-from demandfuncstochastic import calcClustersv2
 from time import perf_counter
 
 (
@@ -250,7 +249,7 @@ warehouse_to_customer_costs = {
 }
 
 prob.setControl('miprelstop', .05) # stop once the mip gap is below 5%
-prob.controls.maxtime = -10*60 # stops after 3 mins
+prob.controls.maxtime = -20*60 # stops after 3 mins
 prob.setObjective(
     warehouse_setup_costs + xp.Sum(
     warehouse_operating_costs[t] + supplier_to_warehouse_costs[t] + warehouse_to_customer_costs[t]
@@ -318,8 +317,27 @@ supp_gdf=Suppliers_df
 time_index=Times 
 product_index=Products
 
+filtered = {k: v for k, v in y.items() if v == 1}
 
+earliest_open = {}
 
+for (loc, t) in filtered.keys():
+    if loc not in earliest_open:
+        earliest_open[loc] = t
+    else:
+        earliest_open[loc] = min(earliest_open[loc], t)
+
+df = pd.DataFrame(
+    sorted(earliest_open.items()), 
+    columns=["Candidate ID", "Opening Period"])
+
+temp = Candidates_df[['Postal District', 'Postal Area', 'Sprawl']].reset_index()
+
+finallocations = pd.merge(df, temp, on ='Candidate ID', how = 'left')
+
+finallocations = finallocations.sort_values("Opening Period")
+
+finallocations.to_csv("micheal thing.csv")
 
 t = max(time_index)
 
