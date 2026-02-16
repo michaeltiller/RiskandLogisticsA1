@@ -337,7 +337,7 @@ finallocations = pd.merge(df, temp, on ='Candidate ID', how = 'left')
 
 finallocations = finallocations.sort_values("Opening Period")
 
-finallocations.to_csv("micheal thing.csv")
+# finallocations.to_csv("micheal thing.csv") for a table in the report
 
 t = max(time_index)
 

@@ -253,7 +253,7 @@ supplier_to_warehouse_costs = {
 
 warehouse_to_customer_costs = {
     t: xp.Sum(
-        agg_ware_cust_travel_costs[j,i] * DemandPeriods[i,p,t] * x[i,j,t,p]
+        CostCandidateCustomers[j,i] * DemandPeriods[i,p,t] * x[i,j,t,p]
         for i in Customers for j in Candidates for p in Products
     )
     for t in Times
@@ -297,9 +297,136 @@ costs = map(
 
 get_basic_summary_sol(prob,xs=x, ys = y, zs=y, time_index=Times, product_index=Products, costs=costs)
 
-put_solution_on_map(
-    probs=prob,
-    xs=x, ys = y, zs=z,
-    cand_gdf=Candidates_df.loc[Candidates], cust_gdf=PostcodeDistricts_df.loc[Customers], supp_gdf=Suppliers_df
-    ,time_index=Times, product_index=Products
+# put_solution_on_map(
+#     probs=prob,
+#     xs=x, ys = y, zs=z,
+#     cand_gdf=Candidates_df.loc[Candidates], cust_gdf=PostcodeDistricts_df.loc[Customers], supp_gdf=Suppliers_df
+#     ,time_index=Times, product_index=Products
+# )
+
+#another map to be consistent with the stochastic one
+
+probs=prob
+ys = prob.getSolution(y)
+zs = prob.getSolution(z)
+ys = prob.getSolution(y)
+zs = prob.getSolution(z)
+cand_gdf=Candidates_df.loc[Candidates]
+cust_gdf=PostcodeDistricts_df.loc[Customers] 
+supp_gdf=Suppliers_df
+time_index=Times 
+product_index=Products
+
+filtered = {k: v for k, v in ys.items() if v == 1}
+
+earliest_open = {}
+
+for (loc, t) in filtered.keys():
+    if loc not in earliest_open:
+        earliest_open[loc] = t
+    else:
+        earliest_open[loc] = min(earliest_open[loc], t)
+
+df = pd.DataFrame(
+    sorted(earliest_open.items()), 
+    columns=["Candidate ID", "Opening Period"])
+
+temp = Candidates_df[['Postal District', 'Postal Area', 'Sprawl']].reset_index()
+
+finallocations = pd.merge(df, temp, on ='Candidate ID', how = 'left')
+
+finallocations = finallocations.sort_values("Opening Period")
+
+# finallocations.to_csv("micheal thing.csv") for a table in the report
+
+t = max(time_index)
+
+# Create a clean map
+m = folium.Map(
+    location=[cand_gdf['lat'].mean(), cand_gdf['lon'].mean()],
+    zoom_start=6.5,
+    tiles='CartoDB positron'
 )
+
+# Small jitter to avoid overlap
+jitter_amount = 0.02
+
+# --- Show suppliers ---
+for k in supp_gdf.index:
+    supp = supp_gdf.loc[k]
+    supp_loc = (supp["lat"], supp["lon"])
+    color = "green" if max(
+        zs[k,j,t,p] 
+        for p in product_index 
+        for j in cand_gdf.index 
+    ) else "grey"
+
+    folium.CircleMarker(
+        location=supp_loc,
+        radius=5,
+        color=color,
+        fill=True,
+        fill_color=color,
+        fill_opacity=0.7,
+        popup=f"Supplier {k}"
+    ).add_to(m)
+
+# --- Show warehouses ---
+for j in cand_gdf.index:
+    ware = cand_gdf.loc[j]
+    ware_loc_jittered = (
+        ware["lat"] + np.random.uniform(-jitter_amount, jitter_amount),
+        ware["lon"] + np.random.uniform(-jitter_amount, jitter_amount)
+    )
+    color = "red" if ys[j,t] else "white"
+
+    folium.CircleMarker(
+        location=ware_loc_jittered,
+        radius=6,
+        color=color,
+        fill=True,
+        fill_color=color,
+        fill_opacity=0.8,
+        popup=f"Warehouse {j}"
+    ).add_to(m)
+
+# --- Show customers ---
+for i in cust_gdf.index:
+    cust = cust_gdf.loc[i]
+    cust_loc_jittered = (
+        cust["lat"] + np.random.uniform(-jitter_amount, jitter_amount),
+        cust["lon"] + np.random.uniform(-jitter_amount, jitter_amount)
+    )
+
+    folium.CircleMarker(
+        location=cust_loc_jittered,
+        radius=4,
+        color="blue",
+        fill=True,
+        fill_color="blue",
+        fill_opacity=0.6,
+        popup=f"Customer {i}"
+    ).add_to(m)
+
+# --- Add a legend ---
+legend_html = """
+     <div style="
+     position: fixed; 
+     bottom: 50px; left: 50px; width: 160px; height: 120px; 
+     border:2px solid grey; z-index:9999; font-size:14px;
+     background-color:white;
+     opacity: 0.9;
+     padding: 10px;
+     ">
+     <b>Legend</b><br>
+     <i class="fa fa-circle" style="color:green"></i>&nbsp; Supplier<br>
+     <i class="fa fa-circle" style="color:grey"></i>&nbsp; Unused Supplier
+
+     <i class="fa fa-circle" style="color:red"></i>&nbsp; Warehouse<br>
+     <i class="fa fa-circle" style="color:blue"></i>&nbsp; Customer
+     </div>
+     """
+m.get_root().html.add_child(folium.Element(legend_html))
+
+# Show map in browser
+m.show_in_browser()

@@ -74,32 +74,7 @@ def put_solution_on_map(probs, xs, ys, zs, cand_gdf:gpd.GeoDataFrame, cust_gdf, 
                 fill_color="green",
                 fill_opacity=1
             ).add_to(m)
-            # folium.Marker(
-            #     location= supp_loc,
-            #     icon=folium.Icon(
-            #         icon="industry",
-            #         prefix="fa",
-            #         color= "green" if max(zs[k,j,t,p] for p in product_index for j in cand_gdf.index) else "white",
-            #         icon_color="black"
-            #     )
-            # ).add_to(m)
-        
-        # #show links to warehouses
-        # for j in cand_gdf.index:
-            
-        #     if max(zs[k,j,t,p] for p in product_index) >0:
 
-        #         ware_loc  = cand_gdf.loc[j, ["lat", "lon"]].values + cand_jitter
-        #         txt = f"S{k} --"
-        #         txt += ",".join( str(p) for p in product_index if zs[k,j,t,p] )
-        #         txt += f"--> W{j}" 
-
-        #         folium.PolyLine(
-        #             locations=[ware_loc, supp_loc],
-        #             color="green" ,
-        #             weight=2,
-        #             tooltip=txt
-        #         ).add_to(m)
 
     #show the warehouses 
     for j in cand_gdf.index:
