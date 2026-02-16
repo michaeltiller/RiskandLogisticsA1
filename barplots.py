@@ -6,8 +6,11 @@ from pathlib import Path
 def load_and_prepare_data(file_path):
     """Load warehouse data and sort it for plotting."""
     df = pd.read_csv(file_path)
-    df["warehouses"] = pd.to_numeric(df["warehouses"], errors="coerce")
     df = df.sort_values(["warehouses", "method"])
+    df["time"] = df["time"]//60
+    df["objval"] = df["objval"]/(1_000_000)
+    df.loc[ df["method"]=="subprob", "method"] = "Sub Problem"
+    
     return df
 
 def create_comparison_chart(df, value_column, y_label, chart_title):
@@ -17,7 +20,8 @@ def create_comparison_chart(df, value_column, y_label, chart_title):
     
     x_positions = np.arange(len(warehouses))
     bar_width = 0.35
-    
+    small_bit_up = min(df[value_column].loc[df[value_column] !=0]) *.1
+
     plt.figure(figsize=(10, 6))
     
     for i, method in enumerate(methods):
@@ -28,6 +32,14 @@ def create_comparison_chart(df, value_column, y_label, chart_title):
             width=bar_width,
             label=method,
             alpha=0.8
+        )
+        plt.scatter(
+            x=x_positions + i * bar_width,
+            y=[small_bit_up for _ in warehouses],
+            alpha= method_data[value_column] == 0,
+            c = "red",
+            s = 200,
+            marker = "X"
         )
     
     plt.xticks(x_positions + bar_width / 2, warehouses)
@@ -41,23 +53,23 @@ def create_comparison_chart(df, value_column, y_label, chart_title):
 
 if __name__ == "__main__":
     # Load the data
-    data_file = Path.home() / "Desktop" / "part_a_comparison_Subprob.txt"
+    data_file =  "part a comparison Subprob.txt"
     warehouse_data = load_and_prepare_data(data_file)
     
+    print(warehouse_data)
     # Chart 1: Computation time comparison
     create_comparison_chart(
         warehouse_data,
         value_column="time",
-        y_label="Computation Time (seconds)",
-        chart_title="How Computation Time Changes with Warehouse Count"
+        y_label="Solve Time (minutes)",
+        chart_title="Solve time for increasing numbers of candidate locations"
     )
     
     # Chart 2: Objective value comparison
     create_comparison_chart(
         warehouse_data,
         value_column="objval",
-        y_label="Objective Value",
-        chart_title="Objective Value Comparison Across Methods"
+        y_label="Total Cost (£ millions)",
+        chart_title="Objective Value for increasing numbers of candidate locations"
     )
     
-    print("Analysis complete!")
