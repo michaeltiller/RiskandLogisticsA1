@@ -27,3 +27,6 @@ The assignment description.
 
 ## part a comparison Subprob.txt
 Contains the data from running "running part a many times".py
+
+## CaseStudyDataPY
+The data files for this project.
